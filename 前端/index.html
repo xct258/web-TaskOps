@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>待办事项</title>
+  <style>
+    body { font-family: Arial; max-width: 600px; margin: 20px auto; }
+    input, button { padding: 6px; margin: 5px 0; }
+    ul { list-style: none; padding-left: 0; }
+    li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #ddd; }
+    li.completed span { text-decoration: line-through; color: gray; }
+    button { cursor: pointer; }
+  </style>
+</head>
+<body>
+  <h1>待办事项</h1>
+
+  <input type="text" id="newTodo" placeholder="输入新待办事项">
+  <button onclick="addTodo()">添加</button>
+
+  <ul id="todoList"></ul>
+
+  <script>
+    const apiBase = 'http://192.168.50.4:8009/todos'; // 替换为你的 FastAPI 地址
+
+    // 获取待办列表
+    async function fetchTodos() {
+      const res = await fetch(apiBase);
+      const todos = await res.json();
+      const ul = document.getElementById('todoList');
+      ul.innerHTML = '';
+      todos.forEach(todo => {
+        const li = document.createElement('li');
+        li.className = todo.completed ? 'completed' : '';
+        li.innerHTML = `
+          <span>${todo.title}</span>
+          <div>
+            <button onclick="toggleTodo(${todo.id}, '${todo.title.replace(/'/g,"\\'")}', ${todo.completed})">
+              ${todo.completed ? '未完成' : '完成'}
+            </button>
+            <button onclick="deleteTodo(${todo.id})">删除</button>
+          </div>
+        `;
+        ul.appendChild(li);
+      });
+    }
+
+    // 添加待办
+    async function addTodo() {
+      const input = document.getElementById('newTodo');
+      const title = input.value.trim();
+      if (!title) return alert('请输入待办事项');
+      await fetch(apiBase, {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title, completed: false})
+      });
+      input.value = '';
+      fetchTodos();
+    }
+
+    // 删除待办
+    async function deleteTodo(id) {
+      if (!id) return alert('ID 无效');
+      await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
+      fetchTodos();
+    }
+
+    // 切换完成状态
+    async function toggleTodo(id, title, completed) {
+      await fetch(`${apiBase}/${id}`, {
+        method: 'PUT',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({title, completed: !completed})
+      });
+      fetchTodos();
+    }
+
+    // 页面加载时获取数据
+    fetchTodos();
+  </script>
+</body>
+</html>
