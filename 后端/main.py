@@ -21,10 +21,10 @@ class Todo(BaseModel):
     待办事项的数据模型
     BaseModel 提供类型检查和数据验证
     """
-    id: int              # 每个待办事项的唯一 ID
-    title: str           # 待办事项标题
-    completed: bool = False  # 是否完成，默认 False
-    created_at: str = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
+    title: str                  # 待办事项标题
+    completed: bool = False     # 是否完成
+    created_at: str = None      # 创建时间
+    id: int = None   # 添加 id 字段
 
 # -----------------------------
 # JSON 文件路径和初始化
@@ -55,17 +55,15 @@ def save_todos():
 # CORS 配置（允许跨域请求）
 # -----------------------------
 # 跨域问题：浏览器前端和后端端口/域名不同，默认会被阻止
-# 需要使用 CORS 中间件允许特定前端访问
-origins = [
-    "http://138.2.7.127:5173",  # 你的前端地址，公网或本地开发地址
-]
+# 需要使用 CORS 中间件允所有前端访问
+origins = ["*"]  # 允许所有来源访问
 
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=origins,      # 允许的前端域名
-    allow_credentials=True,      # 是否允许携带 Cookie
-    allow_methods=["*"],         # 允许的 HTTP 方法，* 表示全部
-    allow_headers=["*"],         # 允许的请求头
+    allow_origins=["*"],       # 允许所有域
+    allow_credentials=False,   # 不允许 Cookie 或认证信息
+    allow_methods=["*"],       # 允许所有方法
+    allow_headers=["*"],       # 允许所有请求头
 )
 
 # -----------------------------
@@ -83,15 +81,18 @@ def get_todos():
 # -----------------------------
 # 路由：添加新的待办事项
 # -----------------------------
-@app.post("/todos", response_model=Todo)
+
+@app.post("/todos", response_model=dict)
 def add_todo(todo: Todo):
-    """
-    POST /todos
-    接收一个 Todo 对象（自动验证类型），并添加到 todos 列表
-    """
-    todos.append(todo.dict())  # 将 Pydantic 对象转换为字典存储
-    save_todos()               # 保存到 JSON 文件，实现持久化
-    return todo                # 返回添加的待办事项给前端
+    new_todo = todo.dict()
+    # 自动生成 ID
+    new_todo["id"] = max([t["id"] for t in todos], default=0) + 1
+    # 自动生成创建时间
+    new_todo["created_at"] = datetime.now(ZoneInfo("Asia/Shanghai")).isoformat()
+    
+    todos.append(new_todo)
+    save_todos()
+    return new_todo
 
 # -----------------------------
 # 路由：删除待办事项
@@ -110,16 +111,12 @@ def delete_todo(todo_id: int):
 # -----------------------------
 # 路由：更新待办事项
 # -----------------------------
-@app.put("/todos/{todo_id}", response_model=Todo)
+@app.put("/todos/{todo_id}", response_model=dict)
 def update_todo(todo_id: int, updated: Todo):
-    """
-    PUT /todos/{todo_id}
-    更新指定 ID 的待办事项
-    updated 是前端发送过来的 Todo 对象
-    """
-    for i, t in enumerate(todos):         # 遍历 todos 列表
-        if t["id"] == todo_id:            # 找到对应 ID
-            todos[i] = updated.dict()     # 更新数据
-            save_todos()                  # 保存到文件
-            return updated                # 返回更新后的数据
-    return {"error": "Todo not found"}    # 如果没找到，返回错误信息
+    for i, t in enumerate(todos):
+        if t["id"] == todo_id:
+            todos[i]["title"] = updated.title
+            todos[i]["completed"] = updated.completed
+            save_todos()
+            return todos[i]
+    return {"error": "Todo not found"}
