@@ -12,4 +12,6 @@ apt install -y npm nodejs
 
 uvicorn main:app --host 0.0.0.0 --port 8009 --reload
 
+npm create vite@latest vue
+
 npm run dev -- --host 0.0.0.0
