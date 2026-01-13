@@ -1,84 +1,3436 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh">
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>待办事项</title>
-  <style>
-    body { font-family: Arial; max-width: 600px; margin: 20px auto; }
-    input, button { padding: 6px; margin: 5px 0; }
-    ul { list-style: none; padding-left: 0; }
-    li { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #ddd; }
-    li.completed span { text-decoration: line-through; color: gray; }
-    button { cursor: pointer; }
-  </style>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>xct258</title>
+  <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-  <h1>待办事项</h1>
-
-  <input type="text" id="newTodo" placeholder="输入新待办事项">
-  <button onclick="addTodo()">添加</button>
-
-  <ul id="todoList"></ul>
-
-  <script>
-    const apiBase = 'http://192.168.50.4:8009/todos'; // 替换为你的 FastAPI 地址
-
-    // 获取待办列表
-    async function fetchTodos() {
-      const res = await fetch(apiBase);
-      const todos = await res.json();
-      const ul = document.getElementById('todoList');
-      ul.innerHTML = '';
-      todos.forEach(todo => {
-        const li = document.createElement('li');
-        li.className = todo.completed ? 'completed' : '';
-        li.innerHTML = `
-          <span>${todo.title}</span>
-          <div>
-            <button onclick="toggleTodo(${todo.id}, '${todo.title.replace(/'/g,"\\'")}', ${todo.completed})">
-              ${todo.completed ? '未完成' : '完成'}
-            </button>
-            <button onclick="deleteTodo(${todo.id})">删除</button>
+  <div id="bg-layer"></div>
+  <div id="loading">
+    <div class="loading-spinner"></div>
+    <div class="loading-text">加载中...</div>
+  </div>
+  <div id="content" style="display:none;">
+    <div id="app" class="app">
+      <div class="page-shell">
+          <div class="grid">
+          <div class="metric-card" id="stat-todos-card" style="cursor: pointer;">
+            <div class="card-icon-wrapper">
+              <span class="card-icon">📝</span>
+            </div>
+            <div class="metric-content">
+              <div class="metric-label">待办</div>
+              <div class="metric-value" id="stat-todos-count">0</div>
+            </div>
           </div>
-        `;
-        ul.appendChild(li);
+          <div class="metric-card" id="stat-reminders-card" style="cursor: pointer;">
+            <div class="card-icon-wrapper">
+              <span class="card-icon">🔔</span>
+            </div>
+            <div class="metric-content">
+              <div class="metric-label">提醒</div>
+              <div class="metric-value" id="stat-reminders-count">0</div>
+              <div class="metric-hint">未处理</div>
+            </div>
+          </div>
+          <div class="metric-card" id="stat-bookmarks-card" style="cursor: pointer;">
+            <div class="card-icon-wrapper">
+              <span class="card-icon">🔖</span>
+            </div>
+            <div class="metric-content">
+              <div class="metric-label">书签</div>
+              <div class="metric-value" id="stat-bookmarks-count">0</div>
+              <div class="metric-hint" id="bookmark-count-badge"></div>
+            </div>
+          </div>
+          <div class="metric-card" id="stat-services-card" style="cursor: pointer;">
+            <div class="card-icon-wrapper">
+              <span class="card-icon">🖥️</span>
+            </div>
+            <div class="metric-content">
+              <div class="metric-label">服务</div>
+              <div class="metric-value" id="stat-services-count">0</div>
+              <div class="metric-hint">状态监控</div>
+            </div>
+          </div>
+          <div class="metric-card" id="stat-ledger-card" style="cursor: pointer;">
+            <div class="card-icon-wrapper">
+              <span class="card-icon">💰</span>
+            </div>
+            <div class="metric-content">
+              <div class="metric-label">资产总览</div>
+              <div class="metric-value" id="stat-ledger-count">0</div>
+              <div class="metric-hint" id="stat-ledger-hint">净资产</div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 资产 -->
+      <div id="ledger-modal" class="screen-overlay" aria-hidden="true">
+        <div class="screen-panel mini-panel" role="dialog" aria-modal="true" aria-label="记账">
+          <div class="mini-header">
+            <div class="mini-header-top">
+              <div class="mini-left">
+                <button class="btn btn-ghost btn-small" id="ledger-back-btn" style="display:none; margin-right: 0.5rem;">←</button>
+                <button class="fab-button" id="open-ledger-form-btn" title="记一笔">💰</button>
+              </div>
+
+              <div class="mini-header-center">
+                <span class="mini-title" id="ledger-modal-title">资产总览</span>
+              </div>
+
+              <div class="mini-right">
+                <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+                  <button class="btn btn-ghost btn-small screen-back-btn" id="close-ledger-modal-btn" aria-label="关闭">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          
+          <div class="mini-body" style="display: flex; flex-direction: column;">
+            <div id="ledger-overview-panel" class="ledger-overview-panel panel-fade">
+                <div id="overview-card-net-worth" class="overview-clickable overview-card-large">
+                   <div class="overview-label">净资产</div>
+                   <div id="overview-net-worth" class="overview-value-large">--</div>
+                </div>
+
+                <div class="overview-section">
+                    <div id="overview-card-assets" class="overview-clickable" style="flex: 1;">
+                        <div class="overview-label">总资产</div>
+                        <div id="overview-assets" class="overview-value" style="color: var(--text-accent-strong);">--</div>
+                    </div>
+                    <div id="overview-card-liabilities" class="overview-clickable" style="flex: 1;">
+                        <div class="overview-label">总负债</div>
+                        <div id="overview-liabilities" class="overview-value" style="color: var(--danger);">--</div>
+                    </div>
+                </div>
+
+                <div class="overview-divider"></div>
+
+                <div class="overview-section">
+                    <div id="overview-card-income" class="overview-clickable" style="flex: 1;">
+                        <div class="overview-label">本月收入</div>
+                        <div id="overview-income" class="overview-value-medium" style="color: var(--success);">--</div>
+                    </div>
+                    <div id="overview-card-expense" class="overview-clickable" style="flex: 1;">
+                        <div class="overview-label">本月支出</div>
+                        <div id="overview-expense" class="overview-value-medium" style="color: var(--danger);">--</div>
+                    </div>
+                </div>
+            </div>
+            <div id="ledger-details-panel" class="panel-fade" style="display: none; flex: 1; flex-direction: column; height: 100%; overflow: hidden;">
+                <div id="ledger-filters" class="bookmark-filter" style="flex-shrink: 0; position:sticky; top:0; z-index:5; background:var(--glass-bg-item); backdrop-filter:blur(10px); margin-bottom:0; border-bottom:1px solid var(--border); border-radius:0; padding: 0.5rem;"></div>
+                <div id="ledger-list" style="flex: 1; overflow-y: auto;"></div>
+            </div>
+
+          </div>
+        </div>
+      </div>
+
+      <!-- 待办 -->
+      <div id="todos-modal" class="screen-overlay" aria-hidden="true">
+        <div class="screen-panel mini-panel" role="dialog" aria-modal="true" aria-label="待办">
+          <div class="mini-header">
+            <div class="mini-header-top">
+              <div class="mini-left">
+                <button class="fab-button" id="open-todo-form-btn" title="添加待办">📝</button>
+              </div>
+
+              <div class="mini-header-center">
+                <span class="mini-title">📋 待办</span>
+              </div>
+
+              <div class="mini-right">
+                <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+                  <button class="btn btn-ghost btn-small screen-back-btn" id="close-todos-modal-btn" aria-label="关闭">✕</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-header-bottom header-filters secondary-row">
+              <button class="btn btn-ghost btn-small filter-todo-btn active" data-priority="all">全部</button>
+              <button class="btn btn-ghost btn-small filter-todo-btn" data-priority="high">高</button>
+              <button class="btn btn-ghost btn-small filter-todo-btn" data-priority="medium">中</button>
+              <button class="btn btn-ghost btn-small filter-todo-btn" data-priority="low">低</button>
+              <button class="btn btn-ghost btn-small filter-todo-btn" data-priority="completed">完成</button>
+            </div>
+          </div>
+          <div class="mini-body" id="todo-list"></div>
+        </div>
+      </div>
+
+      <!-- 提醒 -->
+      <div id="reminders-modal" class="screen-overlay" aria-hidden="true">
+        <div class="screen-panel mini-panel" role="dialog" aria-modal="true" aria-label="提醒">
+          <div class="mini-header">
+            <div class="mini-header-top">
+              <div class="mini-left">
+                <button class="fab-button" id="open-reminder-form-btn" title="添加提醒">✏️</button>
+              </div>
+
+              <div class="mini-header-center">
+                <span class="mini-title">🔔 提醒</span>
+              </div>
+
+              <div class="mini-right">
+                <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+                  <button class="btn btn-ghost btn-small screen-back-btn" id="close-reminders-modal-btn" aria-label="关闭">✕</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-header-bottom header-filters secondary-row">
+              <button class="btn btn-ghost btn-small filter-reminder-btn active" data-filter="due">到期</button>
+              <button class="btn btn-ghost btn-small filter-reminder-btn" data-filter="daily">每日</button>
+              <button class="btn btn-ghost btn-small filter-reminder-btn" data-filter="all">全部</button>
+            </div>
+          </div>
+          <div class="mini-body" id="reminder-list"></div>
+        </div>
+      </div>
+
+      <!-- 书签 -->
+      <div id="bookmarks-modal" class="screen-overlay" aria-hidden="true">
+        <div class="screen-panel mini-panel" role="dialog" aria-modal="true" aria-label="书签">
+          <div class="mini-header">
+            <div class="mini-header-top">
+              <div class="mini-left">
+                <button class="fab-button" id="open-bookmark-form-btn" title="添加书签">➕</button>
+              </div>
+
+              <div class="mini-header-center">
+                <span class="mini-title">🔖 书签</span>
+              </div>
+
+              <div class="mini-right">
+                <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+                  <button class="btn btn-ghost btn-small screen-back-btn" id="close-bookmarks-modal-btn" aria-label="关闭">✕</button>
+                </div>
+              </div>
+            </div>
+
+            <div class="mini-header-bottom header-filters secondary-row">
+              <button class="btn btn-ghost btn-small" id="open-tag-filter-btn" title="筛选标签" aria-label="筛选标签">筛选标签</button>
+            </div>
+          </div>
+          <div class="mini-body">
+            <div id="bookmark-grid" class="bookmark-grid"></div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 服务 -->
+      <div id="services-modal" class="screen-overlay" aria-hidden="true">
+        <div class="screen-panel mini-panel" role="dialog" aria-modal="true" aria-label="服务">
+          <div class="mini-header">
+            <div class="mini-header-top">
+              <div class="mini-left">
+                <button class="fab-button" id="refresh-services-btn" title="刷新">🔄</button>
+              </div>
+
+              <div class="mini-header-center">
+                <span class="mini-title">🖥️ 服务状态</span>
+              </div>
+
+              <div class="mini-right">
+                <div style="display:flex; gap:0.5rem; align-items:center; justify-content:flex-end;">
+                  <button class="btn btn-ghost btn-small screen-back-btn" id="close-services-modal-btn" aria-label="关闭">✕</button>
+                </div>
+              </div>
+            </div>
+          </div>
+          <div class="mini-body" id="service-list"></div>
+        </div>
+      </div>
+
+      <!-- 添加待办弹窗 -->
+      <div id="add-todo-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>添加待办</h3>
+            <button class="modal-close" id="close-add-todo-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="todo-input">内容</label>
+              <input type="text" id="todo-input" placeholder="输入待办事项..." />
+            </div>
+            <div class="form-group">
+              <label for="todo-details-input">详情（可选）</label>
+              <textarea id="todo-details-input" placeholder="可选：填写更多说明" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="todo-priority-select">优先级</label>
+              <select id="todo-priority-select">
+                <option value="high">高</option>
+                <option value="medium" selected>中</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-add-todo-btn">取消</button>
+            <button class="btn btn-primary" id="add-todo-btn">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 编辑待办弹窗 -->
+      <div id="edit-todo-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>编辑待办</h3>
+            <button class="modal-close" id="close-edit-todo-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="edit-todo-input">内容</label>
+              <input type="text" id="edit-todo-input" placeholder="待办事项内容" />
+            </div>
+            <div class="form-group">
+              <label for="edit-todo-details-input">详情（可选）</label>
+              <textarea id="edit-todo-details-input" placeholder="可选：填写更多说明" rows="3"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="edit-todo-priority-select">优先级</label>
+              <select id="edit-todo-priority-select">
+                <option value="high">高</option>
+                <option value="medium">中</option>
+                <option value="low">低</option>
+              </select>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-edit-todo-btn">取消</button>
+            <button class="btn btn-primary" id="save-edit-todo-btn">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 添加提醒弹窗 -->
+      <div id="reminder-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>添加提醒</h3>
+            <button class="modal-close" id="close-reminder-modal-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-note">提醒类型默认为“单次”。如需设置为每日提醒，请在“是否循环”中选择“每日”。</div>
+            <div class="form-group">
+              <label for="reminder-service-input">服务名称</label>
+              <input type="text" id="reminder-service-input" placeholder="例如：阿里云服务器" />
+            </div>
+            <div class="form-group">
+              <label for="reminder-content-input">提醒内容</label>
+              <input type="text" id="reminder-content-input" placeholder="例如：年费到期需续费" />
+            </div>
+            <div class="form-group" id="reminder-recurring-group">
+              <label><input type="checkbox" id="reminder-recurring-checkbox" /> 是否循环</label>
+              <div id="reminder-cycle-group" style="margin-top:0.5rem; display:none">
+                <label for="reminder-cycle-mode">循环模式</label>
+                <select id="reminder-cycle-mode">
+                  <option value="daily">每日</option>
+                  <option value="days">按天</option>
+                  <option value="month_start">每月</option>
+                  <option value="next_month_same_day">到期下月同日</option>
+                </select>
+                <div id="reminder-cycle-days-group" style="margin-top:0.5rem;">
+                  <label for="reminder-cycle-days">循环周期（天）</label>
+                  <input type="number" id="reminder-cycle-days" value="" min="1" />
+                </div>
+              </div>
+            </div>
+            <div class="form-group" id="reminder-due-group">
+              <label for="reminder-time-input">到期时间</label>
+              <input type="date" id="reminder-time-input" />
+            </div>
+            <div class="form-group" id="reminder-advance-group">
+              <label for="reminder-days-input">提前提醒（天）</label>
+              <input type="number" id="reminder-days-input" placeholder="例如：30" value="30" min="0" />
+            </div> 
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-reminder-btn">取消</button>
+            <button class="btn btn-primary" id="add-reminder-btn">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 添加书签弹窗 -->
+      <div id="bookmark-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>添加书签</h3>
+            <button class="modal-close" id="close-bookmark-modal-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="bookmark-title-input">名称</label>
+              <input type="text" id="bookmark-title-input" placeholder="例如：GitHub" />
+            </div>
+            <div class="form-group">
+              <label for="bookmark-url-input">网址</label>
+              <input type="text" id="bookmark-url-input" placeholder="例如：https://github.com" />
+            </div>
+            <div class="form-group">
+              <label for="bookmark-description-input">描述（可选）</label>
+              <textarea id="bookmark-description-input" placeholder="" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="bookmark-tags-input">标签（可选）</label>
+              <div class="tags-editor" id="bookmark-tags-editor">
+                <div class="tags-container" id="bookmark-tags-container"></div>
+                <input type="text" id="bookmark-tags-input" placeholder="输入标签后按回车" class="tags-input" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-bookmark-btn">取消</button>
+            <button class="btn btn-primary" id="add-bookmark-btn">添加</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 编辑书签弹窗 -->
+      <div id="edit-bookmark-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>编辑书签</h3>
+            <button class="modal-close" id="close-edit-bookmark-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="edit-bookmark-title-input">名称</label>
+              <input type="text" id="edit-bookmark-title-input" placeholder="书签名称" />
+            </div>
+            <div class="form-group">
+              <label for="edit-bookmark-url-input">网址</label>
+              <input type="text" id="edit-bookmark-url-input" placeholder="https://..." />
+            </div>
+            <div class="form-group">
+              <label for="edit-bookmark-description-input">描述（可选）</label>
+              <textarea id="edit-bookmark-description-input" placeholder="" rows="2"></textarea>
+            </div>
+            <div class="form-group">
+              <label for="edit-bookmark-tags-input">标签</label>
+              <div class="tags-editor" id="edit-bookmark-tags-editor">
+                <div class="tags-container" id="edit-bookmark-tags-container"></div>
+                <input type="text" id="edit-bookmark-tags-input" placeholder="输入标签后按回车" class="tags-input" />
+              </div>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-edit-bookmark-btn">取消</button>
+            <button class="btn btn-primary" id="save-edit-bookmark-btn">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 编辑提醒弹窗 -->
+      <div id="edit-reminder-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>编辑提醒</h3>
+            <button class="modal-close" id="close-edit-reminder-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-note">默认单次；在“是否循环”中选择“每日”即可将提醒改为每日。</div>
+            <div class="form-group">
+              <label for="edit-reminder-service-input">服务名称</label>
+              <input type="text" id="edit-reminder-service-input" placeholder="例如：阿里云服务器" />
+            </div>
+            <div class="form-group">
+              <label for="edit-reminder-content-input">提醒内容</label>
+              <input type="text" id="edit-reminder-content-input" placeholder="例如：年费到期需续费" />
+            </div>
+            <div class="form-group" id="edit-reminder-recurring-group">
+              <label><input type="checkbox" id="edit-reminder-recurring-checkbox" /> 是否循环</label>
+              <div id="edit-reminder-cycle-group" style="margin-top:0.5rem; display:none">
+                <label for="edit-reminder-cycle-mode">循环模式</label>
+                <select id="edit-reminder-cycle-mode">
+                  <option value="daily">每日</option>
+                  <option value="days">按天</option>
+                  <option value="month_start">每月</option>
+                  <option value="next_month_same_day">到期下月同日</option>
+                </select>
+                <div id="edit-reminder-cycle-days-group" style="margin-top:0.5rem;">
+                  <label for="edit-reminder-cycle-days">循环周期（天）</label>
+                  <input type="number" id="edit-reminder-cycle-days" value="" min="1" />
+                </div>
+              </div>
+            </div>
+            <div class="form-group" id="edit-reminder-due-group">
+              <label for="edit-reminder-time-input">到期时间</label>
+              <input type="date" id="edit-reminder-time-input" />
+            </div>
+            <div class="form-group" id="edit-reminder-advance-group">
+              <label for="edit-reminder-days-input">提前提醒（天）</label>
+              <input type="number" id="edit-reminder-days-input" placeholder="例如：30" value="30" min="0" />
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-edit-reminder-btn">取消</button>
+            <button class="btn btn-primary" id="save-edit-reminder-btn">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 添加记账弹窗 -->
+      <div id="ledger-form-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>记一笔</h3>
+            <button class="modal-close" id="close-ledger-form-btn">✕</button>
+          </div>
+          <div class="modal-body">
+            <div class="form-group">
+              <label for="ledger-type-select">类型</label>
+              <select id="ledger-type-select">
+                <option value="expense" selected>支出</option>
+                <option value="income">收入</option>
+                <option value="debt_in">借入 (增加负债)</option>
+                <option value="debt_out">还款 (减少负债)</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="ledger-amount-input">金额</label>
+              <input type="number" id="ledger-amount-input" placeholder="0.00" step="0.01" />
+            </div>
+            <div class="form-group" id="ledger-interest-group" style="display:none;">
+              <label for="ledger-interest-input">额外利息</label>
+              <input type="number" id="ledger-interest-input" placeholder="0.00" step="0.01" />
+              <div class="form-note">总支出 = 本金(上方金额) + 额外利息。</div>
+            </div>
+            <div class="form-group">
+              <label for="ledger-item-input">项目名称</label>
+              <input type="text" id="ledger-item-input" placeholder="例如：午餐" />
+            </div>
+            <div class="form-group">
+              <label for="ledger-date-input">日期</label>
+              <input type="date" id="ledger-date-input" />
+            </div>
+            <div class="form-group">
+              <label for="ledger-category-input">分类（可选）</label>
+              <input type="text" id="ledger-category-input" placeholder="例如：餐饮" />
+            </div>
+            <div class="form-group">
+              <label for="ledger-notes-input">备注（可选）</label>
+              <textarea id="ledger-notes-input" rows="2"></textarea>
+            </div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-ledger-form-btn">取消</button>
+            <button class="btn btn-primary" id="save-ledger-btn">保存</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 全局标签筛选弹窗 -->
+      <div id="tag-filter-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>筛选标签</h3>
+            <button class="modal-close" id="close-tag-filter-modal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div id="tag-filter-list" class="tag-filter-list"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-tag-filter-btn">完成</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 点击卡片后显示该卡片的标签（点击标签打开网站） -->
+      <div id="tag-select-modal" class="modal-overlay" style="display:none">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h3>选择标签</h3>
+            <button class="modal-close" id="close-tag-select-modal">✕</button>
+          </div>
+          <div class="modal-body">
+            <div id="tag-select-list" class="tag-select-list"></div>
+          </div>
+          <div class="modal-footer">
+            <button class="btn btn-secondary" id="cancel-tag-select-btn">完成</button>
+          </div>
+        </div>
+      </div>
+
+      <!-- 消息提示 -->
+      <div id="message-toast" class="toast" aria-live="polite" role="status"></div>
+    </div>
+  </div>
+
+<script>
+  // ============================================================================
+  // 主题配置与初始化
+  // ============================================================================
+  const THEME_API = 'https://random-image.p1.xct258.top/';
+  const FALLBACK_THEME = [84, 114, 160];
+
+  /**
+   * 设置主题色 CSS 变量
+   */
+  function setThemeVariables(rgb) {
+    const root = document.documentElement;
+    const r = Number(rgb[0]) || 0;
+    const g = Number(rgb[1]) || 0;
+    const b = Number(rgb[2]) || 0;
+
+    const clamp = (n) => Math.max(0, Math.min(255, n));
+    const rgba = (a) => `rgba(${r}, ${g}, ${b}, ${a})`;
+    const mix = (a, b, t) => Math.round(a * (1 - t) + b * t);
+    const mixRgb = (tr, tg, tb, t) => [mix(r, tr, t), mix(g, tg, t), mix(b, tb, t)];
+
+    // 亮度估算（用于生成更稳的文字色/hover 色）
+    const luminance = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+
+    // hover：轻微提亮
+    const hr = clamp(r + 28);
+    const hg = clamp(g + 28);
+    const hb = clamp(b + 28);
+
+    // ink：用于浅色玻璃面板上的“主题色文字”，避免过亮/过暗导致可读性差
+    const inkDelta = 110;
+    const ir = clamp(luminance > 160 ? r - inkDelta : r + inkDelta);
+    const ig = clamp(luminance > 160 ? g - inkDelta : g + inkDelta);
+    const ib = clamp(luminance > 160 ? b - inkDelta : b + inkDelta);
+
+    // 根据主题色亮度选择中性正文色（避开主题色，优先保证可读性）
+    const isDarkTheme = luminance < 135;
+    const textColor = isDarkTheme ? '#f8fafc' : '#0f172a';
+    const mutedColor = isDarkTheme ? 'rgba(248, 250, 252, 0.78)' : '#475569';
+    const borderColor = isDarkTheme ? 'rgba(248, 250, 252, 0.18)' : 'rgba(15, 23, 42, 0.12)';
+
+    // 主题化文字：在“贴近主题”和“可读性”之间折中（不直接用纯主题色）
+    // 深色主题：向白色混合让文字更亮；浅色主题：向黑色混合让文字更深。
+    const [acr, acg, acb] = isDarkTheme ? mixRgb(255, 255, 255, 0.52) : mixRgb(0, 0, 0, 0.52);
+    const [asr, asg, asb] = isDarkTheme ? mixRgb(255, 255, 255, 0.64) : mixRgb(0, 0, 0, 0.64);
+    const [awr, awg, awb] = isDarkTheme ? mixRgb(255, 255, 255, 0.40) : mixRgb(0, 0, 0, 0.40);
+    const accentText = `rgb(${acr}, ${acg}, ${acb})`;
+    const accentStrongText = `rgb(${asr}, ${asg}, ${asb})`;
+    const accentWeakText = `rgb(${awr}, ${awg}, ${awb})`;
+    const accentMutedText = isDarkTheme
+      ? `rgba(${acr}, ${acg}, ${acb}, 0.78)`
+      : `rgba(${acr}, ${acg}, ${acb}, 0.70)`;
+    const linkText = accentStrongText;
+
+    // 统一可读的文字阴影（背景图/玻璃底下更稳）
+    const textShadow = isDarkTheme ? 'rgba(0, 0, 0, 0.35)' : 'rgba(255, 255, 255, 0.55)';
+
+    root.style.setProperty('--theme-r', r);
+    root.style.setProperty('--theme-g', g);
+    root.style.setProperty('--theme-b', b);
+
+    root.style.setProperty('--primary', `rgb(${r}, ${g}, ${b})`);
+    root.style.setProperty('--primary-hover', `rgb(${hr}, ${hg}, ${hb})`);
+    root.style.setProperty('--primary-8', rgba(0.08));
+    root.style.setProperty('--primary-16', rgba(0.16));
+    root.style.setProperty('--primary-24', rgba(0.24));
+    root.style.setProperty('--primary-32', rgba(0.32));
+    root.style.setProperty('--primary-40', rgba(0.40));
+    root.style.setProperty('--primary-ink', `rgb(${ir}, ${ig}, ${ib})`);
+
+    // 正文/弱化文字/边框：随主题亮度切换，但保持中性（不染主题色）
+    root.style.setProperty('--text', textColor);
+    root.style.setProperty('--muted', mutedColor);
+    root.style.setProperty('--border', borderColor);
+
+    // Modal/input theme variants (keep contrast regardless of global text color)
+    root.style.setProperty('--modal-bg', isDarkTheme ? 'rgba(6, 8, 13, 0.92)' : 'rgba(255, 255, 255, 0.9)');
+    root.style.setProperty('--modal-text', textColor);
+    root.style.setProperty('--modal-footer-bg', isDarkTheme ? 'rgba(255,255,255,0.02)' : 'rgba(248, 251, 255, 0.5)');
+    root.style.setProperty('--input-bg', isDarkTheme ? 'rgba(12, 18, 38, 0.85)' : 'rgba(255, 255, 255, 0.9)');
+    root.style.setProperty('--input-bg-focus', isDarkTheme ? 'rgba(12, 18, 38, 1)' : 'rgba(255, 255, 255, 1)');
+    root.style.setProperty('--input-text', textColor);
+    root.style.setProperty('--placeholder', isDarkTheme ? 'rgba(248,250,252,0.6)' : 'rgba(11,18,32,0.5)');
+
+    // 更“主题化”的文字层级（用于标题/数字/强调信息）
+    root.style.setProperty('--text-accent', accentText);
+    root.style.setProperty('--text-accent-strong', accentStrongText);
+    root.style.setProperty('--text-accent-weak', accentWeakText);
+    root.style.setProperty('--text-accent-muted', accentMutedText);
+    root.style.setProperty('--text-link', linkText);
+    root.style.setProperty('--text-shadow', textShadow);
+
+    // 主题色背景上的前景文字色（按钮等）
+    root.style.setProperty('--on-primary', luminance > 160 ? '#0f172a' : '#fff');
+  }
+
+  /**
+   * 快速获取主题色
+   */
+  async function fetchAndApplyThemeColor() {
+    try {
+      const res = await fetch(THEME_API, { method: 'HEAD', cache: 'no-store' });
+      const themeHeader = res.headers.get('X-Theme-Color');
+      const nums = themeHeader ? themeHeader.match(/\d+/g) : null;
+      const rgb = nums ? nums.map(Number) : FALLBACK_THEME;
+      setThemeVariables(rgb);
+    } catch (e) {
+      setThemeVariables(FALLBACK_THEME);
+    }
+  }
+
+  /**
+   * 获取并应用主题背景
+   */
+  async function fetchAndApplyThemeBackground() {
+    try {
+      const res = await fetch(THEME_API);
+      const themeHeader = res.headers.get('X-Theme-Color');
+      const nums = themeHeader ? themeHeader.match(/\d+/g) : null;
+      if (nums) setThemeVariables(nums.map(Number));
+
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const bgLayer = document.getElementById('bg-layer');
+      if (bgLayer) bgLayer.style.backgroundImage = `url('${url}')`;
+      return true;
+    } catch (e) {
+      console.warn('主题背景加载失败，使用回退色', e);
+      setThemeVariables(FALLBACK_THEME);
+      return false;
+    }
+  }
+
+  // ============================================================================
+  // API 服务层
+  // ============================================================================
+  const ApiService = {
+    // 优先列表：先尝试相对路径 /api，失败则尝试线上完整地址
+    bases: ['/api', 'https://taskops-api.p1.xct258.top'],
+
+    async request(endpoint, options = {}) {
+      let lastError;
+
+      for (const base of this.bases) {
+        try {
+          const url = `${base}${endpoint}`;
+          const response = await fetch(url, {
+            headers: { 'Content-Type': 'application/json' },
+            ...options
+          });
+
+          if (response.ok) {
+            return await response.json();
+          }
+
+          // 如果是 404 (本地无代理) 或 5xx (服务挂了)，尝试下一个地址
+          // 4xx (如 400 参数错误, 401 未授权) 通常是业务逻辑错误，不应切换环境
+          if (response.status === 404 || response.status >= 500) {
+            console.warn(`[API] 路径 ${base} 不可用 (${response.status})，尝试切换备用地址...`);
+            lastError = new Error(`HTTP ${response.status}`);
+            continue;
+          }
+
+          throw new Error(`HTTP ${response.status}`);
+          
+        } catch (error) {
+          console.warn(`[API] 连接 ${base} 失败: ${error.message}，尝试切换备用地址...`);
+          lastError = error;
+          // 网络错误(fetch throw) 或 上面抛出的 404/5xx，继续尝试下一个 base
+          continue;
+        }
+      }
+      
+      throw new Error(`API Error: ${lastError ? lastError.message : 'Unknown error'}`);
+    },
+
+    // Use PUT for updates (backend expects PUT). No fallback to PATCH to avoid inconsistency.
+    async updateWithFallback(endpoint, data) {
+      return await this.request(endpoint, { method: 'PUT', body: JSON.stringify(data) });
+    },
+
+    todos: {
+      getAll: () => ApiService.request('/todos'),
+      create: (data) => ApiService.request('/todos', { method: 'POST', body: JSON.stringify(data) }),
+      update: (id, data) => ApiService.updateWithFallback(`/todos/${id}`, data),
+      delete: (id) => ApiService.request(`/todos/${id}`, { method: 'DELETE' })
+    },
+
+    reminders: {
+      getAll: () => ApiService.request('/reminders'),
+      create: (data) => ApiService.request('/reminders', { method: 'POST', body: JSON.stringify(data) }),
+      update: (id, data) => ApiService.updateWithFallback(`/reminders/${id}`, data),
+      markProcessed: (id) => ApiService.request(`/reminders/${id}/processed`, { method: 'PUT' }),
+      delete: (id) => ApiService.request(`/reminders/${id}`, { method: 'DELETE' })
+    },
+    bookmarks: {
+      getAll: () => ApiService.request('/bookmarks'),
+      create: (data) => ApiService.request('/bookmarks', { method: 'POST', body: JSON.stringify(data) }),
+      update: (id, data) => ApiService.updateWithFallback(`/bookmarks/${id}`, data),
+      delete: (id) => ApiService.request(`/bookmarks/${id}`, { method: 'DELETE' })
+    },
+    serverStatus: {
+      getAll: (limit = 50) => ApiService.request(`/server/status?limit=${limit}`)
+    },
+    ledger: {
+      getAll: () => ApiService.request('/ledger'),
+      getAsset: () => ApiService.request('/asset'),
+      getLiability: () => ApiService.request('/liability'),
+      updateAsset: (amount) => ApiService.request('/asset', { method: 'POST', body: JSON.stringify({ amount }) }),
+      updateLiability: (amount) => ApiService.request('/liability', { method: 'POST', body: JSON.stringify({ amount }) }),
+      create: (data) => ApiService.request('/ledger', { method: 'POST', body: JSON.stringify(data) }),
+      update: (id, data) => ApiService.updateWithFallback(`/ledger/${id}`, data),
+      delete: (id) => ApiService.request(`/ledger/${id}`, { method: 'DELETE' })
+    }
+  };
+
+  // ============================================================================
+  // 应用状态管理
+  // ============================================================================
+  const AppState = {
+    todos: [],
+    reminders: [],
+    editingTodoId: null,
+    bookmarks: [],
+    serverStatus: [],
+    ledger: [],
+    asset: null,
+    liability: null,
+    editingLedgerId: null,
+    editingBookmarkId: null,
+    currentEditReminderId: null,
+    todoFilterPriority: 'all',
+    reminderFilter: 'due',  // 'due' 或 'all'
+    screenOpen: false, // 标记任何模态框是否打开
+    bookmarkFilterTags: []
+
+  };
+
+  // ============================================================================
+  // DOM 缓存
+  // ============================================================================
+  const DOM = {
+    // Modals
+    addTodoModal: document.getElementById('add-todo-modal'),
+    editTodoModal: document.getElementById('edit-todo-modal'),
+    reminderModal: document.getElementById('reminder-modal'),
+    ledgerFormModal: document.getElementById('ledger-form-modal'),
+
+    // Todo Form
+    todoInput: document.getElementById('todo-input'),
+    todoPrioritySelect: document.getElementById('todo-priority-select'),
+    todoDetailsInput: document.getElementById('todo-details-input'),
+    editTodoInput: document.getElementById('edit-todo-input'),
+    editTodoPriority: document.getElementById('edit-todo-priority-select'),
+    editTodoDetails: document.getElementById('edit-todo-details-input'),
+
+    // Reminder Form
+    reminderServiceInput: document.getElementById('reminder-service-input'),
+    reminderContentInput: document.getElementById('reminder-content-input'),
+    reminderTimeInput: document.getElementById('reminder-time-input'),
+    reminderDaysInput: document.getElementById('reminder-days-input'),
+    reminderRecurringCheckbox: document.getElementById('reminder-recurring-checkbox'),
+    reminderCycleModeSelect: document.getElementById('reminder-cycle-mode'),
+    reminderCycleDaysInput: document.getElementById('reminder-cycle-days'),
+    reminderCycleDaysGroup: document.getElementById('reminder-cycle-days-group'),
+
+    // Ledger Form
+    ledgerTypeSelect: document.getElementById('ledger-type-select'),
+    ledgerAmountInput: document.getElementById('ledger-amount-input'),
+    ledgerItemInput: document.getElementById('ledger-item-input'),
+    ledgerDateInput: document.getElementById('ledger-date-input'),
+    ledgerCategoryInput: document.getElementById('ledger-category-input'),
+    ledgerNotesInput: document.getElementById('ledger-notes-input'),
+    saveLedgerBtn: document.getElementById('save-ledger-btn'),
+    cancelLedgerFormBtn: document.getElementById('cancel-ledger-form-btn'),
+    closeLedgerFormBtn: document.getElementById('close-ledger-form-btn'),
+    openLedgerFormBtn: document.getElementById('open-ledger-form-btn'),
+
+    // Lists
+    todoList: document.getElementById('todo-list'),
+    reminderList: document.getElementById('reminder-list'),
+    bookmarkGrid: document.getElementById('bookmark-grid'),
+    ledgerList: document.getElementById('ledger-list'),
+    serviceList: document.getElementById('service-list'),
+
+    // Badges & Buttons
+    bookmarkCountBadge: document.getElementById('bookmark-count-badge'),
+    // 书签区域添加入口
+    openBookmarkFormBtn: document.getElementById('open-bookmark-form-btn'),
+    openTodoFormBtn: document.getElementById('open-todo-form-btn'),
+    openReminderFormBtn: document.getElementById('open-reminder-form-btn'),
+    statTodos: document.getElementById('stat-todos-count'),
+    statReminders: document.getElementById('stat-reminders-count'),
+    statRemindersCard: document.getElementById('stat-reminders-card'),
+    statRemindersHintEl: document.querySelector('#stat-reminders-card .metric-hint'),
+    statBookmarks: document.getElementById('stat-bookmarks-count'),
+    statServices: document.getElementById('stat-services-count'),
+    statServicesCard: document.getElementById('stat-services-card'),
+    statLedger: document.getElementById('stat-ledger-count'),
+    statLedgerCard: document.getElementById('stat-ledger-card'),
+    statLedgerHint: document.getElementById('stat-ledger-hint'),
+    ledgerMonthExpense: document.getElementById('ledger-month-expense'),
+    statLedgerSummary: document.getElementById('ledger-summary-container'),
+
+    // Modal Controls
+    closeAddTodoBtn: document.getElementById('close-add-todo-btn'),
+    cancelAddTodoBtn: document.getElementById('cancel-add-todo-btn'),
+    addTodoBtn: document.getElementById('add-todo-btn'),
+    closeEditTodoBtn: document.getElementById('close-edit-todo-btn'),
+    cancelEditTodoBtn: document.getElementById('cancel-edit-todo-btn'),
+    saveEditTodoBtn: document.getElementById('save-edit-todo-btn'),
+    closeReminderModalBtn: document.getElementById('close-reminder-modal-btn'),
+    cancelReminderBtn: document.getElementById('cancel-reminder-btn'),
+    addReminderBtn: document.getElementById('add-reminder-btn'),
+    // Bookmark
+    bookmarkModal: document.getElementById('bookmark-modal'),
+    closeBookmarkModalBtn: document.getElementById('close-bookmark-modal-btn'),
+    cancelBookmarkBtn: document.getElementById('cancel-bookmark-btn'),
+    addBookmarkBtn: document.getElementById('add-bookmark-btn'),
+    bookmarkTitleInput: document.getElementById('bookmark-title-input'),
+    bookmarkUrlInput: document.getElementById('bookmark-url-input'),
+    bookmarkDescriptionInput: document.getElementById('bookmark-description-input'),
+    bookmarkTagsInput: document.getElementById('bookmark-tags-input'),
+    editBookmarkDescriptionInput: document.getElementById('edit-bookmark-description-input'),
+    editBookmarkModal: document.getElementById('edit-bookmark-modal'),
+    openTagFilterBtn: document.getElementById('open-tag-filter-btn'),
+    tagFilterModal: document.getElementById('tag-filter-modal'),
+    tagFilterList: document.getElementById('tag-filter-list'),
+    closeTagFilterBtn: document.getElementById('close-tag-filter-modal'),
+    cancelTagFilterBtn: document.getElementById('cancel-tag-filter-btn'),
+    // Tag select modal (per-card)
+    tagSelectModal: document.getElementById('tag-select-modal'),
+    tagSelectList: document.getElementById('tag-select-list'),
+    closeTagSelectBtn: document.getElementById('close-tag-select-modal'),
+    cancelTagSelectBtn: document.getElementById('cancel-tag-select-btn'),
+    closeEditBookmarkBtn: document.getElementById('close-edit-bookmark-btn'),
+    cancelEditBookmarkBtn: document.getElementById('cancel-edit-bookmark-btn'),
+    saveEditBookmarkBtn: document.getElementById('save-edit-bookmark-btn'),
+    editBookmarkTitleInput: document.getElementById('edit-bookmark-title-input'),
+    editBookmarkUrlInput: document.getElementById('edit-bookmark-url-input'),
+    editBookmarkTagsInput: document.getElementById('edit-bookmark-tags-input'),
+    editReminderModal: document.getElementById('edit-reminder-modal'),
+    closeEditReminderBtn: document.getElementById('close-edit-reminder-btn'),
+    cancelEditReminderBtn: document.getElementById('cancel-edit-reminder-btn'),
+    saveEditReminderBtn: document.getElementById('save-edit-reminder-btn'),
+    editReminderServiceInput: document.getElementById('edit-reminder-service-input'),
+    editReminderContentInput: document.getElementById('edit-reminder-content-input'),
+    editReminderTimeInput: document.getElementById('edit-reminder-time-input'),
+    editReminderDaysInput: document.getElementById('edit-reminder-days-input'),
+    editReminderRecurringCheckbox: document.getElementById('edit-reminder-recurring-checkbox'),
+    editReminderCycleModeSelect: document.getElementById('edit-reminder-cycle-mode'),
+    editReminderCycleDaysInput: document.getElementById('edit-reminder-cycle-days'),
+    editReminderCycleDaysGroup: document.getElementById('edit-reminder-cycle-days-group'),
+
+    // Services
+    servicesModal: document.getElementById('services-modal'),
+    serviceList: document.getElementById('service-list'),
+    refreshServicesBtn: document.getElementById('refresh-services-btn'),
+    closeServicesModalBtn: document.getElementById('close-services-modal-btn'),
+
+    // Toast
+    messageToast: document.getElementById('message-toast')
+  };
+
+  // ============================================================================
+  // 标签编辑器类
+  // ============================================================================
+  class TagsEditor {
+    constructor(inputId, containerId) {
+      this.input = document.getElementById(inputId);
+      this.container = document.getElementById(containerId);
+      this.tags = [];
+      
+      // 按回车添加标签
+      this.input.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+          e.preventDefault();
+          this.addTag();
+        }
+      });
+      
+      // 失焦时添加标签
+      this.input.addEventListener('blur', () => {
+        if (this.input.value.trim()) {
+          this.addTag();
+        }
+      });
+    }
+    
+    addTag() {
+      const value = this.input.value.trim();
+      if (!value) return;
+      
+      // 避免重复
+      if (this.tags.includes(value)) {
+        this.input.value = '';
+        return;
+      }
+      
+      this.tags.push(value);
+      this.input.value = '';
+      this.render();
+    }
+    
+    removeTag(index) {
+      this.tags.splice(index, 1);
+      this.render();
+    }
+    
+    render() {
+      this.container.innerHTML = this.tags.map((tag, idx) => `
+        <div class="tag-item">
+          <span class="tag-item-text">${escapeHtml(tag)}</span>
+          <button type="button" class="tag-item-delete" data-index="${idx}">×</button>
+        </div>
+      `).join('');
+      
+      // 绑定删除按钮事件
+      this.container.querySelectorAll('.tag-item-delete').forEach(btn => {
+        btn.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          this.removeTag(parseInt(btn.dataset.index));
+        });
+      });
+    }
+    
+    getTags() {
+      return this.tags;
+    }
+    
+    setTags(tags) {
+      this.tags = Array.isArray(tags) ? [...tags] : [];
+      this.render();
+    }
+    
+    reset() {
+      this.tags = [];
+      this.input.value = '';
+      this.render();
+    }
+  }
+
+  // ============================================================================
+  // 工具函数
+  // ============================================================================
+
+  /**
+   * 格式化日期
+   */
+  function formatDate(dateString) {
+    if (!dateString) return '';
+    try {
+      return new Date(dateString).toLocaleString('zh-CN');
+    } catch {
+      return dateString;
+    }
+  }
+
+  /**
+   * 转义 HTML 特殊字符
+   */
+  function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+  }
+
+  /**
+   * 返回本地（浏览器时区）ISO 日期字符串 YYYY-MM-DD
+   */
+  function localIsoDate() {
+    const d = new Date();
+    const tzOffset = d.getTimezoneOffset() * 60000; // 毫秒
+    return new Date(Date.now() - tzOffset).toISOString().slice(0,10);
+  }
+
+  // 返回相对于今天的 ISO 日期字符串（offset 天）
+  function isoDateOffset(offsetDays) {
+    const tzOffset = new Date().getTimezoneOffset() * 60000;
+    return new Date(Date.now() - tzOffset + offsetDays * 86400000).toISOString().slice(0,10);
+  }
+
+  /**
+   * 检查并提示：
+   * - 普通提醒已过期（due_time < 今天 且 未处理）
+   * - 每日提醒昨日未完成（created_at <= 昨天 且 last_completed_date != 昨天）
+   */
+  function checkReminderAlerts() {
+    const today = isoDateOffset(0);
+    const yesterday = isoDateOffset(-1);
+
+    const expired = AppState.reminders.filter(r => {
+        // 过滤掉已处理的一次性任务
+        if (!r.recurring && r.processed) return false;
+        
+        // 检查是否过期
+        if (r.due_time && r.due_time < today) {
+            // 对于循环任务，如果今天还没做（last_completed_date != today），也算过期提醒
+            if (r.recurring) {
+                return r.last_completed_date !== today;
+            }
+            return true;
+        }
+        return false;
+    });
+
+    // 每日提醒逻辑现在统一并入 recurring='daily'，上面的逻辑已经覆盖
+    // 但为了兼容旧数据或强调每日打卡，我们可以单独统计一下 cycle_mode='daily' 的过期
+    const missedDaily = expired.filter(r => r.cycle_mode === 'daily');
+
+    const parts = [];
+    if (expired.length) parts.push(`有 ${expired.length} 个已过期提醒`);
+
+    if (parts.length) {
+      showMessage(parts.join('，') + '。请前往提醒页查看。', 'warning');
+    }
+    // 更新统计卡上的提示（卡片右上角 metric-hint）
+    updateReminderCardAlert(expired.length, missedDaily.length);
+  }
+
+  function updateReminderCardAlert(expiredCount, missedCount) {
+    const card = DOM.statRemindersCard;
+    const hint = DOM.statRemindersHintEl;
+    if (!card || !hint) return;
+
+    if (expiredCount || missedCount) {
+      card.classList.add('alert');
+      const parts = [];
+      if (expiredCount) parts.push(`${expiredCount} 过期`);
+      if (missedCount) parts.push(`${missedCount} 昨日未完成`);
+      hint.textContent = parts.join(' / ');
+      hint.classList.add('alert');
+    } else {
+      card.classList.remove('alert');
+      hint.textContent = '未处理';
+      hint.classList.remove('alert');
+    }
+  }
+
+  /**
+   * 显示消息提示
+   */
+  function showMessage(text, type = 'info') {
+    DOM.messageToast.textContent = text;
+    DOM.messageToast.className = `toast ${type}`;
+    requestAnimationFrame(() => DOM.messageToast.classList.add('show'));
+    setTimeout(() => DOM.messageToast.classList.remove('show'), 3000);
+  }
+
+  /**
+   * 打开模态框
+   */
+  function openModal(modalEl) {
+    if (!modalEl) return;
+    // 移除可能残留的 closing 状态
+    modalEl.classList.remove('closing');
+    modalEl.style.display = 'flex';
+
+    // 重置滚动位置
+    const body = modalEl.querySelector('.modal-body');
+    if (body) {
+      body.scrollTop = 0;
+    }
+
+    // 强制重绘以触发 CSS 过渡
+    modalEl.offsetHeight; 
+    modalEl.classList.add('show');
+  }
+
+  /**
+   * 关闭模态框
+   */
+  function closeModal(modalEl) {
+    if (!modalEl) return;
+    // 添加 closing 类触发关闭动画
+    modalEl.classList.remove('show');
+    
+    // 等待过渡结束后隐藏 display
+    const onTransitionEnd = (e) => {
+      if (e.target !== modalEl) return;
+      modalEl.removeEventListener('transitionend', onTransitionEnd);
+      if (!modalEl.classList.contains('show')) {
+        modalEl.style.display = 'none';
+      }
+    };
+    modalEl.addEventListener('transitionend', onTransitionEnd);
+    
+    // 兜底：如果 transitionend 未触发（例如元素不可见），强制隐藏
+    setTimeout(() => {
+      if (!modalEl.classList.contains('show')) {
+        modalEl.style.display = 'none';
+      }
+    }, 250);
+  }
+
+  // ============================================================================
+  // 书签：CRUD 与渲染
+  // ============================================================================
+  async function fetchBookmarks() {
+    try {
+      AppState.bookmarks = await ApiService.bookmarks.getAll();
+      renderBookmarks();
+    } catch (error) {
+      showMessage('加载书签失败', 'error');
+      console.error('fetchBookmarks:', error);
+    }
+  }
+
+  function openBookmarkForm() {
+    DOM.bookmarkTitleInput.value = '';
+    DOM.bookmarkUrlInput.value = '';
+    DOM.bookmarkDescriptionInput.value = '';
+    DOM.bookmarkTagsInput.value = '';
+    // reset tags editor instance so tags from previous entry do not persist
+    if (typeof bookmarkTagsEditor !== 'undefined' && bookmarkTagsEditor && typeof bookmarkTagsEditor.reset === 'function') {
+      bookmarkTagsEditor.reset();
+    }
+    openModal(DOM.bookmarkModal);
+  }
+
+  function closeBookmarkForm() {
+    closeModal(DOM.bookmarkModal);
+  }
+
+  async function addBookmark() {
+    const title = DOM.bookmarkTitleInput.value.trim();
+    const url = DOM.bookmarkUrlInput.value.trim();
+    const description = DOM.bookmarkDescriptionInput.value.trim();
+    const tagsRaw = DOM.bookmarkTagsInput.value.trim();
+    if (!title || !url) {
+      showMessage('请输入名称与网址', 'warning');
+      return;
+    }
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    try {
+      await ApiService.bookmarks.create({ title, url, description, tags });
+      showMessage('书签已添加', 'success');
+      closeBookmarkForm();
+      await fetchBookmarks();
+    } catch (error) {
+      showMessage('添加失败', 'error');
+      console.error('addBookmark:', error);
+    }
+  }
+
+  function openEditBookmark(id) {
+    const bm = AppState.bookmarks.find(b => b.id == id);
+    if (!bm) return;
+    AppState.editingBookmarkId = id;
+    DOM.editBookmarkTitleInput.value = bm.title;
+    DOM.editBookmarkUrlInput.value = bm.url;
+    DOM.editBookmarkDescriptionInput.value = bm.description || '';
+    // 标签由编辑器管理，这里不设置输入框的值
+    openModal(DOM.editBookmarkModal);
+  }
+
+  function closeEditBookmark() {
+    closeModal(DOM.editBookmarkModal);
+    AppState.editingBookmarkId = null;
+  }
+
+  async function saveEditBookmark() {
+    if (!AppState.editingBookmarkId) return;
+    const title = DOM.editBookmarkTitleInput.value.trim();
+    const url = DOM.editBookmarkUrlInput.value.trim();
+    const tagsRaw = DOM.editBookmarkTagsInput.value.trim();
+    const tags = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    if (!title || !url) {
+      showMessage('名称与网址不能为空', 'warning');
+      return;
+    }
+    try {
+      const description = DOM.editBookmarkDescriptionInput.value.trim();
+      await ApiService.bookmarks.update(AppState.editingBookmarkId, { title, url, tags, description });
+      showMessage('书签已更新', 'success');
+      closeEditBookmark();
+      await fetchBookmarks();
+    } catch (error) {
+      showMessage('保存失败', 'error');
+      console.error('saveEditBookmark:', error);
+    }
+  }
+
+  async function deleteBookmark(id) {
+    if (!confirm('确定要删除这个书签吗？')) return;
+    try {
+      await ApiService.bookmarks.delete(id);
+      showMessage('书签已删除', 'success');
+      await fetchBookmarks();
+    } catch (error) {
+      showMessage('删除失败', 'error');
+      console.error('deleteBookmark:', error);
+    }
+  }
+
+  function normalizeUrl(url) {
+    if (!/^https?:\/\//i.test(url)) return 'https://' + url;
+    return url;
+  }
+
+  function renderBookmarks() {
+    const total = AppState.bookmarks.length;
+
+    if (DOM.statBookmarks) DOM.statBookmarks.textContent = String(total);
+    if (DOM.bookmarkCountBadge) DOM.bookmarkCountBadge.textContent = `${total} 项`;
+
+    if (total === 0) {
+      DOM.bookmarkGrid.innerHTML = `
+        <div class="empty-state empty-centered grid-span-full">
+          <p class="empty-text">暂无书签</p>
+        </div>`;
+      return;
+    }
+
+    // 应用标签过滤（如果有） - 支持多选标签（所有选中标签都必须存在）
+    const filterTags = (Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : []).filter(Boolean);
+    const items = (filterTags.length > 0) ? AppState.bookmarks.filter(bm => {
+      const tags = Array.isArray(bm.tags) ? bm.tags : (typeof bm.tags === 'string' ? bm.tags.split(',').map(t=>t.trim()).filter(Boolean) : []);
+      // 要求 bookmark 必须包含所有选中的标签（AND 逻辑）
+      return filterTags.every(ft => tags.includes(ft));
+    }) : [...AppState.bookmarks];
+
+    const html = items.map(bm => {
+      const tags = Array.isArray(bm.tags) ? bm.tags : (typeof bm.tags === 'string' ? bm.tags.split(',').map(t=>t.trim()).filter(Boolean) : []);
+      const tagCount = tags.length;
+      const tagHtml = ''; // per-tag badges are removed from card view; use the tag button instead
+      const urlNorm = normalizeUrl(escapeHtml(bm.url));
+      return `
+      <div class="bookmark-item" data-id="${bm.id}" data-url="${urlNorm}" data-title="${escapeHtml(bm.title)}" data-tags="${tags.join(', ')}" tabindex="0" role="link" aria-label="${escapeHtml(bm.title)}: ${escapeHtml(bm.url)}">
+        <div class="bookmark-block">
+          <img class="bookmark-favicon" src="https://www.google.com/s2/favicons?domain=${encodeURIComponent(bm.url)}&sz=64" alt="" onerror="this.style.display='none'" />
+          <div class="bookmark-block-content">
+            <div class="bookmark-block-title">${escapeHtml(bm.title)}</div>
+            ${bm.description ? `<div class="bookmark-block-desc">${escapeHtml(bm.description)}</div>` : ''}
+          </div>
+          <div class="bookmark-block-actions">
+            ${tagCount ? ('<button class="btn btn-ghost btn-small tag-bookmark-btn" type="button" data-tags="' + tags.join(', ') + '">标签</button>') : ''}
+            <button class="btn btn-secondary btn-small edit-bookmark-btn" data-id="${bm.id}" type="button">编辑</button>
+            <button class="btn btn-danger btn-small delete-bookmark-btn" data-id="${bm.id}" type="button">删除</button>
+          </div>
+        </div>
+      </div>
+      `;
+    }).join('');
+
+    const activeTags = Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : [];
+    const filterBarHtml = activeTags.length ? `<div class="bookmark-filter">显示标签：${activeTags.map(t=>`<span class="tag-badge tag-filter-item" data-tag="${escapeHtml(t)}">${escapeHtml(t)} <button type="button" class="tag-item-delete tag-filter-remove" aria-label="删除筛选" data-tag="${escapeHtml(t)}">×</button></span>`).join(' ')}</div>` : '';
+
+    // render cards into the grid
+    DOM.bookmarkGrid.innerHTML = html;
+
+    // ensure the filter bar sits above the grid (direct child of .mini-body) so it appears under the header
+    const miniBody = DOM.bookmarkGrid.parentElement;
+    const existingFilterBar = miniBody.querySelector('.bookmark-filter');
+    if (existingFilterBar) existingFilterBar.remove();
+    if (filterBarHtml) {
+      miniBody.insertAdjacentHTML('afterbegin', filterBarHtml);
+
+      // per-tag remove handlers are bound separately below (handles multiple tags)
+    }
+
+    // 卡片点击/键盘导航：整体块（点击非按钮区域）导航；按钮与标签有独立行为
+    DOM.bookmarkGrid.querySelectorAll('.bookmark-item').forEach(item => {
+      item.addEventListener('click', (e) => {
+        if (e.target.closest('button') || e.target.classList.contains('tag-badge')) return; // 点击的是按钮/标签，交由它们处理
+        const url = item.dataset.url;
+        if (!url) return;
+        // 默认在新标签页打开
+        window.open(url, '_blank');
+      });
+      item.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter' || e.key === ' ') {
+          e.preventDefault();
+          const url = item.dataset.url;
+          if (url) window.open(url, '_blank');
+        }
+      });
+    });
+
+    // 卡片上不再显示单独的标签徽章，改为右上角的标签按键打开标签选择器。
+
+    // 绑定过滤条上的删除（移除单个筛选标签）按钮
+    miniBody.querySelectorAll('.tag-filter-remove').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tag = btn.dataset.tag;
+        if (!tag) return;
+        AppState.bookmarkFilterTags = (Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : []).filter(t => t !== tag);
+        renderBookmarks();
+      });
+    });
+
+    // 绑定编辑按钮
+    DOM.bookmarkGrid.querySelectorAll('.edit-bookmark-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        openEditBookmark(e.target.dataset.id);
+      });
+    });
+
+    // 绑定删除按钮
+    DOM.bookmarkGrid.querySelectorAll('.delete-bookmark-btn').forEach(btn => {
+      btn.addEventListener('click', e => {
+        e.preventDefault();
+        e.stopPropagation();
+        deleteBookmark(e.target.dataset.id);
+      });
+    });
+
+    // 绑定标签按钮（卡片右上角）
+    DOM.bookmarkGrid.querySelectorAll('.tag-bookmark-btn').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const item = btn.closest('.bookmark-item');
+        if (!item) return;
+        openTagSelector(item);
+      });
+    });
+  } 
+
+  // 全局：打开标签筛选模态（聚合所有书签的标签）
+  function openTagFilter() {
+    const tagsSet = new Set();
+    AppState.bookmarks.forEach(bm => {
+      const tags = Array.isArray(bm.tags) ? bm.tags : (typeof bm.tags === 'string' ? bm.tags.split(',').map(t => t.trim()).filter(Boolean) : []);
+      tags.forEach(t => tagsSet.add(t));
+    });
+    if (tagsSet.size === 0) {
+      showMessage('当前没有标签可筛选', 'info');
+      return;
+    }
+    const listEl = DOM.tagFilterList;
+    const activeTags = Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : [];
+    listEl.innerHTML = Array.from(tagsSet).map(t => ` <button type="button" class="btn btn-ghost tag-filter-item ${activeTags.includes(t)?'active':''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
+    openModal(DOM.tagFilterModal);
+
+    // bind clicks: toggle selection (multi-select)
+    listEl.querySelectorAll('.tag-filter-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tag = btn.dataset.tag;
+        if (!tag) return;
+        const curr = Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : [];
+        if (curr.includes(tag)) {
+          AppState.bookmarkFilterTags = curr.filter(t => t !== tag);
+          btn.classList.remove('active');
+        } else {
+          AppState.bookmarkFilterTags = [...curr, tag];
+          btn.classList.add('active');
+        }
+        renderBookmarks();
+      });
+    });
+  }
+
+  // ============================================================================
+  // 模态框交互
+  // ============================================================================
+
+  /**
+   * 打开待办添加表单
+   */
+  function openTodoForm() {
+    openModal(DOM.addTodoModal);
+    // reset details and focus
+    DOM.todoDetailsInput.value = '';
+    setTimeout(() => DOM.todoInput.focus(), 100);
+  }
+
+  /**
+   * 关闭待办添加表单
+   */
+  function closeTodoForm() {
+    closeModal(DOM.addTodoModal);
+    DOM.todoInput.value = '';
+    DOM.todoPrioritySelect.value = 'medium';
+    DOM.todoDetailsInput.value = '';
+  }
+
+  /**
+   * 打开待办编辑表单
+   */
+  function openEditTodo(id) {
+    const todo = AppState.todos.find(t => t.id == id);
+    if (!todo) return;
+
+    AppState.editingTodoId = id;
+    DOM.editTodoInput.value = todo.title;
+    DOM.editTodoPriority.value = todo.priority || 'medium';
+    DOM.editTodoDetails.value = todo.details || '';
+    openModal(DOM.editTodoModal);
+  }
+
+  // 点击卡片的标签选择器（显示该卡片的标签，点击标签则进行标签筛选）
+  function openTagSelector(source) {
+    let tags = [];
+    if (!source) return showMessage('该书签没有标签', 'info');
+    if (source instanceof Element) {
+      const tagsStr = source.dataset.tags || '';
+      tags = tagsStr ? tagsStr.split(',').map(t => t.trim()).filter(Boolean) : [];
+    } else if (Array.isArray(source)) {
+      tags = source;
+    } else if (typeof source === 'string') {
+      tags = source.split(',').map(t => t.trim()).filter(Boolean);
+    }
+
+    if (!tags.length) {
+      showMessage('该书签没有标签', 'info');
+      return;
+    }
+
+    const list = document.getElementById('tag-select-list');
+    const activeTags = Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : [];
+    list.innerHTML = `<div class="form-note">选择标签以筛选书签</div>` + tags.map(t => `<button type="button" class="btn btn-ghost tag-select-item ${activeTags.includes(t) ? 'active' : ''}" data-tag="${escapeHtml(t)}">${escapeHtml(t)}</button>`).join('');
+    openModal(document.getElementById('tag-select-modal'));
+
+    // bind clicks: toggle selection (multi-select), immediate apply
+    list.querySelectorAll('.tag-select-item').forEach(btn => {
+      btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const tag = btn.dataset.tag;
+        if (!tag) return;
+        const curr = Array.isArray(AppState.bookmarkFilterTags) ? AppState.bookmarkFilterTags : [];
+        if (curr.includes(tag)) {
+          AppState.bookmarkFilterTags = curr.filter(t => t !== tag);
+          btn.classList.remove('active');
+        } else {
+          AppState.bookmarkFilterTags = [...curr, tag];
+          btn.classList.add('active');
+        }
+        renderBookmarks();
+      });
+    });
+  }
+
+  function closeTagSelector() {
+    closeModal(document.getElementById('tag-select-modal'));
+  }
+
+  /**
+   * 关闭待办编辑表单
+   */
+  function closeEditTodo() {
+    closeModal(DOM.editTodoModal);
+    AppState.editingTodoId = null;
+    DOM.editTodoInput.value = '';
+    DOM.editTodoDetails.value = '';
+  }
+
+  /**
+   * 打开提醒添加表单
+   */
+  function openReminderForm() {
+    // 重置并打开表单
+    DOM.reminderTimeInput.value = '';
+    DOM.reminderDaysInput.value = '30';
+    DOM.reminderRecurringCheckbox.checked = false;
+    DOM.reminderCycleModeSelect.value = 'days';
+    DOM.reminderCycleDaysInput.value = '';
+    // ensure advance & due & recurring group visibility defaults
+    document.getElementById('reminder-advance-group').style.display = '';
+    document.getElementById('reminder-due-group').style.display = '';
+    document.getElementById('reminder-recurring-group').style.display = '';
+    document.getElementById('reminder-cycle-group').style.display = 'none';
+    document.getElementById('reminder-cycle-days-group').style.display = 'none';
+    openModal(DOM.reminderModal);
+  }
+
+  /**
+   * 关闭提醒添加表单
+   */
+  function closeReminderForm() {
+    closeModal(DOM.reminderModal);
+    DOM.reminderServiceInput.value = '';
+    DOM.reminderContentInput.value = '';
+    DOM.reminderTimeInput.value = '';
+    DOM.reminderDaysInput.value = '30';
+    DOM.reminderRecurringCheckbox.checked = false;
+    DOM.reminderCycleDaysInput.value = '30';
+    document.getElementById('reminder-advance-group').style.display = '';
+    document.getElementById('reminder-due-group').style.display = '';
+    document.getElementById('reminder-recurring-group').style.display = '';
+    document.getElementById('reminder-cycle-group').style.display = 'none';
+  }
+
+  // ============================================================================
+  // 待办事项操作
+  // ============================================================================
+
+  /**
+   * 加载待办列表
+   */
+  async function fetchTodos() {
+    try {
+      AppState.todos = await ApiService.todos.getAll();
+      renderTodos();
+    } catch (error) {
+      showMessage('加载待办事项失败', 'error');
+      console.error('fetchTodos:', error);
+    }
+  }
+
+  /**
+   * 添加待办
+   */
+  async function addTodo() {
+    const title = DOM.todoInput.value.trim();
+    if (!title) {
+      showMessage('请输入待办事项内容', 'warning');
+      return;
+    }
+
+    const priority = DOM.todoPrioritySelect.value;
+    const details = DOM.todoDetailsInput.value.trim();
+    try {
+      await ApiService.todos.create({ title, priority, details });
+      showMessage('待办事项已添加', 'success');
+      closeTodoForm();
+      await fetchTodos();
+    } catch (error) {
+      showMessage('添加失败', 'error');
+      console.error('addTodo:', error);
+    }
+  }
+
+  /**
+   * 切换待办完成状态
+   */
+  async function toggleTodo(id) {
+    const todo = AppState.todos.find(t => t.id == id);
+    if (!todo) return;
+
+    const newCompleted = !todo.completed;
+    const completedAt = newCompleted ? new Date().toISOString() : null;
+
+    try {
+      await ApiService.todos.update(id, {
+        title: todo.title,
+        completed: newCompleted,
+        completed_at: completedAt,
+        priority: todo.priority || 'medium'
+      });
+      await fetchTodos();
+    } catch (error) {
+      showMessage('更新失败', 'error');
+      console.error('toggleTodo:', error);
+    }
+  }
+
+  /**
+   * 保存待办编辑
+   */
+  async function saveEditTodo() {
+    if (!AppState.editingTodoId) return;
+
+    const title = DOM.editTodoInput.value.trim();
+    if (!title) {
+      showMessage('待办事项不能为空', 'warning');
+      return;
+    }
+
+    const todo = AppState.todos.find(t => t.id == AppState.editingTodoId);
+    const priority = DOM.editTodoPriority.value;
+    const details = DOM.editTodoDetails.value.trim();
+
+    try {
+      await ApiService.todos.update(AppState.editingTodoId, {
+        title,
+        completed: todo.completed,
+        priority,
+        details
+      });
+      showMessage('待办事项已更新', 'success');
+      closeEditTodo();
+      await fetchTodos();
+    } catch (error) {
+      showMessage('保存失败', 'error');
+      console.error('saveEditTodo:', error);
+    }
+  }
+
+  /**
+   * 删除待办
+   */
+  async function deleteTodo(id) {
+    if (!confirm('确定要删除这个待办事项吗？')) return;
+
+    try {
+      await ApiService.todos.delete(id);
+      showMessage('待办事项已删除', 'success');
+      await fetchTodos();
+    } catch (error) {
+      showMessage('删除失败', 'error');
+      console.error('deleteTodo:', error);
+    }
+  }
+
+  /**
+   * 渲染待办列表
+   */
+  function renderTodos() {
+    // 根据过滤条件筛选待办
+    let filteredTodos;
+    if (AppState.todoFilterPriority === 'completed') {
+      // 只显示已完成的
+      filteredTodos = AppState.todos.filter(todo => todo.completed);
+    } else if (AppState.todoFilterPriority === 'all') {
+      // 显示所有未完成的
+      filteredTodos = AppState.todos.filter(todo => !todo.completed);
+    } else {
+      // 显示特定优先级的未完成待办
+      filteredTodos = AppState.todos.filter(todo => !todo.completed && todo.priority === AppState.todoFilterPriority);
+    }
+    
+    if (DOM.statTodos) DOM.statTodos.textContent = `${AppState.todos.filter(t => !t.completed).length}`;
+
+    if (filteredTodos.length === 0) {
+      const filterText = AppState.todoFilterPriority === 'completed' ? '已完成的' : (AppState.todoFilterPriority === 'all' ? '' : '符合条件的');
+      DOM.todoList.innerHTML = `<div class="empty-state empty-centered"><p class="empty-text">暂无${filterText}待办事项</p></div>`;
+      return;
+    }
+
+    // 按优先级和创建时间排序：高 > 中 > 低，同优先级按创建时间升序（早的在前）
+    const priorityOrder = { high: 0, medium: 1, low: 2 };
+    const sortedTodos = [...filteredTodos].sort((a, b) => {
+      const aPriority = priorityOrder[a.priority] ?? 1;
+      const bPriority = priorityOrder[b.priority] ?? 1;
+      if (aPriority !== bPriority) {
+        return aPriority - bPriority;
+      }
+      // 同优先级，按创建时间升序（越早创建的越靠前）
+      return new Date(a.created_at) - new Date(b.created_at);
+    });
+
+    const priorityText = { high: '高', medium: '中', low: '低' };
+    const html = sortedTodos.map(todo => {
+      const badge = todo.priority
+        ? `<span class="priority-badge ${todo.priority}">${priorityText[todo.priority]}</span>`
+        : '';
+      
+      // 根据完成状态显示不同的按钮文字
+      const completeBtnText = todo.completed ? '待办' : '完成';
+
+      // 显示时间信息：已完成显示创建和完成时间，未完成只显示创建时间
+      let timeInfo;
+      if (todo.completed && todo.completed_at) {
+        timeInfo = `创建于 ${formatDate(todo.created_at)}<br>完成于 ${formatDate(todo.completed_at)}`;
+      } else {
+        timeInfo = `创建于 ${formatDate(todo.created_at)}`;
+      }
+
+      return `
+        <div class="todo-item ${todo.completed ? 'completed' : ''}" data-id="${todo.id}">
+          <div class="todo-header">
+            <div class="todo-title-wrap">
+              <span class="todo-title">${escapeHtml(todo.title)}</span>
+              ${badge}
+            </div>
+            <div class="todo-actions">
+              <button class="btn btn-secondary btn-small complete-todo-btn" data-id="${todo.id}">${completeBtnText}</button>
+              <button class="btn btn-secondary btn-small edit-todo-btn" data-id="${todo.id}">编辑</button>
+              <button class="btn btn-danger btn-small delete-todo-btn" data-id="${todo.id}">删除</button>
+            </div>
+          </div>
+          ${todo.details ? `<div class="todo-details">${escapeHtml(todo.details)}</div>` : ''}
+          <div class="todo-meta">${timeInfo}</div>
+        </div>
+      `;
+    }).join('');
+
+    DOM.todoList.innerHTML = `<div class="todo-list">${html}</div>`;
+
+    // 绑定事件
+    DOM.todoList.querySelectorAll('.complete-todo-btn').forEach(btn => {
+      btn.addEventListener('click', e => toggleTodo(e.target.dataset.id));
+    });
+    DOM.todoList.querySelectorAll('.edit-todo-btn').forEach(btn => {
+      btn.addEventListener('click', e => openEditTodo(e.target.dataset.id));
+    });
+    DOM.todoList.querySelectorAll('.delete-todo-btn').forEach(btn => {
+      btn.addEventListener('click', e => deleteTodo(e.target.dataset.id));
+    });
+  }
+
+  // ============================================================================
+  // 提醒事项操作
+  // ============================================================================
+
+  /**
+   * 加载提醒列表
+   */
+  async function fetchReminders() {
+    try {
+      AppState.reminders = await ApiService.reminders.getAll();
+      renderReminders();
+      // 检查并提示过期或昨日未完成的每日提醒
+      checkReminderAlerts();
+    } catch (error) {
+      showMessage('加载提醒事项失败', 'error');
+      console.error('fetchReminders:', error);
+    }
+  }
+
+  /**
+   * 添加提醒
+   */
+  async function addReminder() {
+    const service = DOM.reminderServiceInput.value.trim();
+    const content = DOM.reminderContentInput.value.trim();
+    const dueTime = DOM.reminderTimeInput.value;
+    const advanceDays = parseInt(DOM.reminderDaysInput.value) || 0;
+    const recurring = DOM.reminderRecurringCheckbox ? DOM.reminderRecurringCheckbox.checked : false;
+    const cycleMode = DOM.reminderCycleModeSelect ? DOM.reminderCycleModeSelect.value : null;
+    const cycleDays = (cycleMode === 'days' && DOM.reminderCycleDaysInput && DOM.reminderCycleDaysInput.value) ? parseInt(DOM.reminderCycleDaysInput.value) : null;
+
+    if (!service || !content) {
+      showMessage('请填写服务名称和内容', 'warning');
+      return;
+    }
+    
+    // 如果不是每日循环，必须有到期时间
+    if (!dueTime && !(recurring && cycleMode === 'daily')) {
+         showMessage('请选择到期时间', 'warning');
+         return;
+    }
+
+    try {
+      const payload = { 
+          service, 
+          content, 
+          due_time: dueTime, 
+          advance_days: advanceDays, 
+          type: 'once', // 前端不再区分 type，统一由后端处理
+          recurring: recurring,
+          cycle_mode: recurring ? cycleMode : null,
+          cycle_days: (recurring && cycleMode === 'days') ? cycleDays : null
+      };
+      
+      // 每日提醒特殊处理：如果没有选时间，默认今天
+      if (recurring && cycleMode === 'daily' && !dueTime) {
+          payload.due_time = localIsoDate();
+      }
+
+      await ApiService.reminders.create(payload);
+      
+      showMessage('提醒事项已添加', 'success');
+      closeReminderForm();
+      await fetchReminders();
+    } catch (error) {
+      showMessage('添加失败', 'error');
+      console.error('addReminder:', error);
+    }
+  }
+
+  /**
+   * 标记提醒为已处理
+   */
+  async function markReminderProcessed(id) {
+    try {
+      const res = await ApiService.reminders.markProcessed(id);
+      // 支持两种后端返回：旧版 {message,data} 与 新版直接返回 reminder 对象
+      if (res && res.message) {
+        if (res.message.includes('daily')) {
+          showMessage('本次提醒已完成，已安排下次提醒', 'success');
+        } else if (res.message.includes('recurring')) {
+          const due = res.data && res.data.due_time ? (res.data.due_time.split('T')[0]) : '';
+          showMessage(`已续期到 ${due}`, 'success');
+        } else {
+          showMessage('已标记为处理', 'success');
+        }
+      } else if (res && res.type === 'daily') {
+        showMessage('本次提醒已完成，已安排下次提醒', 'success');
+      } else if (res && res.recurring) {
+        const due = res.due_time ? (res.due_time.split('T')[0]) : '';
+        showMessage(`已续期到 ${due}`, 'success');
+      } else if (res && res.processed) {
+        showMessage('已标记为处理', 'success');
+      } else {
+        showMessage('已标记为处理', 'success');
+      }
+      await fetchReminders();
+    } catch (error) {
+      showMessage('标记失败', 'error');
+      console.error('markReminderProcessed:', error);
+    }
+  }
+
+  /**
+   * 打开编辑提醒表单
+   */
+  function openEditReminder(id) {
+    const reminder = AppState.reminders.find(r => r.id == id);
+    if (!reminder) return;
+
+    AppState.currentEditReminderId = id;
+    DOM.editReminderServiceInput.value = reminder.service;
+    DOM.editReminderContentInput.value = reminder.content;
+    DOM.editReminderTimeInput.value = (reminder.due_time || '').split('T')[0];
+    DOM.editReminderDaysInput.value = reminder.advance_days || 0;
+    
+    // 统一处理 recurring
+    const isRecurring = !!reminder.recurring || reminder.type === 'daily'; // 兼容旧数据
+    DOM.editReminderRecurringCheckbox.checked = isRecurring;
+    
+    // 统一处理 cycle_mode
+    let mode = reminder.cycle_mode;
+    if (!mode && reminder.type === 'daily') mode = 'daily';
+    if (!mode) mode = 'days'; // default
+    
+    DOM.editReminderCycleModeSelect.value = mode;
+    DOM.editReminderCycleDaysInput.value = reminder.cycle_days || '';
+
+    // UI 显示控制
+    document.getElementById('edit-reminder-advance-group').style.display = '';
+    document.getElementById('edit-reminder-due-group').style.display = '';
+    document.getElementById('edit-reminder-recurring-group').style.display = '';
+    
+    document.getElementById('edit-reminder-cycle-group').style.display = isRecurring ? '' : 'none';
+    document.getElementById('edit-reminder-cycle-days-group').style.display = (isRecurring && mode === 'days') ? '' : 'none';
+    
+    // Handle month_start visibility
+    if (isRecurring && mode === 'month_start') {
+        document.getElementById('edit-reminder-due-group').style.display = 'none';
+        document.getElementById('edit-reminder-advance-group').style.display = 'none';
+    }
+    
+    openModal(DOM.editReminderModal);
+  }
+
+  /**
+   * 关闭编辑提醒表单
+   */
+  function closeEditReminder() {
+    AppState.currentEditReminderId = null;
+    DOM.editReminderServiceInput.value = '';
+    DOM.editReminderContentInput.value = '';
+    DOM.editReminderTimeInput.value = '';
+    DOM.editReminderDaysInput.value = '30';
+    document.getElementById('edit-reminder-advance-group').style.display = '';
+    document.getElementById('edit-reminder-due-group').style.display = '';
+    closeModal(DOM.editReminderModal);
+  }
+
+  /**
+   * 保存编辑提醒
+   */
+  async function saveEditReminder() {
+    const id = AppState.currentEditReminderId;
+    if (!id) return;
+
+    const service = DOM.editReminderServiceInput.value.trim();
+    const content = DOM.editReminderContentInput.value.trim();
+    const dueTime = DOM.editReminderTimeInput.value;
+    const advanceDays = parseInt(DOM.editReminderDaysInput.value) || 0;
+    const recurring = DOM.editReminderRecurringCheckbox ? DOM.editReminderRecurringCheckbox.checked : false;
+    const cycleMode = DOM.editReminderCycleModeSelect ? DOM.editReminderCycleModeSelect.value : null;
+    const cycleDays = (cycleMode === 'days' && DOM.editReminderCycleDaysInput && DOM.editReminderCycleDaysInput.value) ? parseInt(DOM.editReminderCycleDaysInput.value) : null;
+
+    if (!service || !content) {
+      showMessage('请填写服务名称和内容', 'warning');
+      return;
+    }
+    
+    if (!dueTime && !(recurring && cycleMode === 'daily')) {
+         showMessage('请选择到期时间', 'warning');
+         return;
+    }
+
+    try {
+      const payload = { 
+          service, 
+          content, 
+          due_time: dueTime, 
+          advance_days: advanceDays, 
+          recurring: recurring,
+          cycle_mode: recurring ? cycleMode : null,
+          cycle_days: (recurring && cycleMode === 'days') ? cycleDays : null
+      };
+      
+      if (recurring && cycleMode === 'daily' && !dueTime) {
+          // 如果编辑时没填时间，保留原时间或设为今天
+      } else {
+          payload.due_time = dueTime;
+      }
+
+      await ApiService.reminders.update(id, payload);
+      showMessage('提醒已更新', 'success');
+      closeEditReminder();
+      await fetchReminders();
+    } catch (error) {
+      showMessage('保存失败', 'error');
+      console.error('saveEditReminder:', error);
+    }
+  }
+
+  /**
+   * 删除提醒
+   */
+  async function deleteReminder(id) {
+    if (!confirm('确定要删除这个提醒吗？')) return;
+
+    try {
+      await ApiService.reminders.delete(id);
+      showMessage('提醒已删除', 'success');
+      await fetchReminders();
+    } catch (error) {
+      showMessage('删除失败', 'error');
+      console.error('deleteReminder:', error);
+    }
+  }
+
+  /**
+   * 切换提醒显示范围
+   */
+  // 已不再使用的提醒范围切换逻辑已移除，统一由 AppState.reminderFilter 控制显示范围
+
+  /**
+   * 获取应显示的提醒列表
+   */
+  function getDisplayReminders() {
+    const now = Date.now();
+    const today = localIsoDate();
+
+    if (AppState.reminderFilter === 'daily') {
+      // 过滤出所有循环模式为 daily 的任务
+      return AppState.reminders.filter(r => r.cycle_mode === 'daily' || r.type === 'daily').sort((a, b) => (a.service || '').localeCompare(b.service));
+    } 
+    if (AppState.reminderFilter === 'all') {
+      // 显示所有未完成的任务（包括循环任务）
+      // 对于循环任务，只要存在就显示（因为它们永远是“未完成”状态，只是 due_time 变了）
+      // 但为了不让列表太长，我们只显示：
+      // 1. 一次性任务且未处理
+      // 2. 循环任务（总是显示，或者只显示最近的？）-> 总是显示，方便管理
+      return AppState.reminders
+        .filter(r => !r.processed || r.recurring)
+        .sort((a, b) => (a.remind_time || a.due_time || '').localeCompare(b.remind_time || b.due_time || ''));
+    } else {
+      // 默认视图：只显示“需要关注”的
+      // 1. 已经到了提醒时间 (remind_time <= today)
+      // 2. 且未处理 (processed=false)
+      // 3. 对于循环任务，如果今天已经打卡了 (last_completed_date == today)，则不显示（除非它又过期了？）
+      
+      return AppState.reminders
+        .filter(r => {
+          // 已处理的一次性任务不显示
+          if (!r.recurring && r.processed) return false;
+          
+          // 还没到提醒时间的不显示
+          if (r.remind_time && r.remind_time > today) return false;
+          
+          // 循环任务特殊逻辑：
+          if (r.recurring) {
+              // 如果是每日任务，且今天已完成，则隐藏
+              if (r.cycle_mode === 'daily' && r.last_completed_date === today) return false;
+              
+              // 其他循环任务，如果还没到 due_time，但到了 remind_time，显示
+              // 如果已经过了 due_time，肯定显示
+          }
+          
+          return true;
+        })
+        .sort((a, b) => (a.remind_time || a.due_time || '').localeCompare(b.remind_time || b.due_time || ''));
+    }
+  }
+
+  /**
+   * 渲染提醒列表
+   */
+  function renderReminders() {
+    const displayReminders = getDisplayReminders();
+    const today = localIsoDate();
+    
+    // 计算未处理数量
+    // 逻辑：所有过期或到期未处理的任务
+    const unprocessedCount = AppState.reminders.filter(r => {
+        if (!r.recurring && r.processed) return false;
+        if (r.remind_time && r.remind_time > today) return false;
+        if (r.recurring && r.cycle_mode === 'daily' && r.last_completed_date === today) return false;
+        return true;
+    }).length;
+
+    if (DOM.statRemindersCount) DOM.statRemindersCount.textContent = String(unprocessedCount);
+
+    if (displayReminders.length === 0) {
+      DOM.reminderList.innerHTML = `<div class="empty-state empty-centered"><p class="empty-text">暂无提醒事项</p></div>`;
+      return;
+    }
+
+    const html = displayReminders.map(r => {
+      const isDaily = (r.cycle_mode === 'daily' || r.type === 'daily');
+      const isDoneToday = isDaily && r.last_completed_date === today;
+      
+      // 状态徽章
+      let badgeHtml = '';
+      if (isDaily) {
+          badgeHtml = `<span class="priority-badge ${isDoneToday ? 'low' : 'high'}">每日</span>`;
+      } else if (r.recurring) {
+          badgeHtml = `<span class="priority-badge medium">循环</span>`;
+      } else {
+          badgeHtml = `<span class="priority-badge low">一次性</span>`;
+      }
+      
+      // 时间显示
+      let timeHtml = '';
+      if (r.due_time) {
+          const due = r.due_time.split('T')[0];
+          const isExpired = due < today;
+          timeHtml = `<div class="reminder-time ${isExpired ? 'expired' : ''}">到期：${due}</div>`;
+      }
+      
+      // 按钮状态
+      const btnClass = (isDaily && isDoneToday) ? 'btn-ghost' : 'btn-primary';
+      const btnText = (isDaily && isDoneToday) ? '已打卡' : '完成';
+      const btnDisabled = (isDaily && isDoneToday) ? 'disabled' : '';
+
+      return `
+        <div class="reminder-item ${isDoneToday ? 'completed' : ''}" data-id="${r.id}">
+          <div class="reminder-header">
+            <div class="reminder-title-wrap">
+              <div class="reminder-service">${escapeHtml(r.service)}</div>
+              ${badgeHtml}
+            </div>
+            <div class="reminder-actions">
+              <button class="btn ${btnClass} btn-small process-reminder-btn" data-id="${r.id}" ${btnDisabled}>${btnText}</button>
+              <button class="btn btn-secondary btn-small edit-reminder-btn" data-id="${r.id}">编辑</button>
+              <button class="btn btn-danger btn-small delete-reminder-btn" data-id="${r.id}">删除</button>
+            </div>
+          </div>
+          <div class="reminder-content">${escapeHtml(r.content)}</div>
+          ${timeHtml}
+        </div>
+      `;
+    }).join('');
+
+    DOM.reminderList.innerHTML = `<div class="reminder-list">${html}</div>`;
+
+    // 绑定事件
+    DOM.reminderList.querySelectorAll('.process-reminder-btn').forEach(btn => {
+      if (!btn.disabled) {
+        btn.addEventListener('click', e => markReminderProcessed(e.target.dataset.id));
+      }
+    });
+    DOM.reminderList.querySelectorAll('.edit-reminder-btn').forEach(btn => {
+      btn.addEventListener('click', e => openEditReminder(e.target.dataset.id));
+    });
+    DOM.reminderList.querySelectorAll('.delete-reminder-btn').forEach(btn => {
+      btn.addEventListener('click', e => deleteReminder(e.target.dataset.id));
+    });
+  }
+
+  function renderServerStatus() {
+    const list = AppState.serverStatus || [];
+    const total = list.length;
+    
+    // 统计正常/异常
+    const successCount = list.filter(s => s.is_success).length;
+    // const errorCount = list.length - successCount;
+    
+    if (DOM.statServices) DOM.statServices.textContent = `${total}`;
+    
+    if (total === 0) {
+      DOM.serviceList.innerHTML = `<div class="empty-state empty-centered"><p class="empty-text">暂无服务状态记录</p></div>`;
+      return;
+    }
+
+    const html = list.map(item => {
+      const isError = !item.is_success;
+      const statusText = isError ? '异常' : '正常';
+      const statusClass = isError ? 'error' : 'success';
+      const timeStr = item.received_at ? new Date(item.received_at).toLocaleString('zh-CN') : item.time;
+      
+      // 处理 extra 字段
+      let extraHtml = '';
+      if (item.extra && Object.keys(item.extra).length > 0) {
+          const extraItems = Object.entries(item.extra).map(([key, value]) => {
+              return `
+                <div class="extra-item">
+                  <div class="extra-key">${escapeHtml(key)}</div>
+                  <div class="extra-val">${escapeHtml(String(value))}</div>
+                </div>`;
+          }).join('');
+          extraHtml = `<div class="server-extra">${extraItems}</div>`;
+      }
+
+      return `
+        <div class="server-card status-${statusClass}" onclick="this.classList.toggle('expanded')">
+          <div class="server-summary">
+            <div class="server-main-info">
+                <div class="server-name-row">
+                    <span class="server-name">${escapeHtml(item.server_name)}</span>
+                    <span class="status-badge ${statusClass}">${statusText}</span>
+                    <span class="server-time" style="margin-left: auto;">${timeStr}</span>
+                </div>
+                <div class="server-brief">
+                    ${item.service_name ? `<span class="brief-label">${escapeHtml(item.service_name)}:</span>` : ''}
+                    <span class="brief-content">${escapeHtml(item.content || item.state_detail || '')}</span>
+                </div>
+            </div>
+            <div class="server-expand-icon">
+                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
+            </div>
+          </div>
+          
+          <div class="server-details">
+            ${extraHtml}
+          </div>
+        </div>
+      `;
+    }).join('');
+    
+    DOM.serviceList.innerHTML = `<div class="reminder-list">${html}</div>`;
+  }
+
+  async function fetchServerStatus() {
+    try {
+      const data = await ApiService.serverStatus.getAll(50);
+      AppState.serverStatus = data;
+      renderServerStatus();
+    } catch (e) {
+      console.error('fetchServerStatus error', e);
+    }
+  }
+
+  // ============================================================================
+  // 记账：CRUD 与渲染
+  // ============================================================================
+  async function fetchLedger() {
+    try {
+      const [ledgerData, assetData, liabilityData] = await Promise.all([
+        ApiService.ledger.getAll(),
+        ApiService.ledger.getAsset(),
+        ApiService.ledger.getLiability()
+      ]);
+      AppState.ledger = ledgerData;
+      AppState.asset = assetData;
+      AppState.liability = liabilityData;
+      renderLedger();
+    } catch (error) {
+      showMessage('加载账单失败', 'error');
+      console.error('fetchLedger:', error);
+    }
+  }
+
+  function renderLedger() {
+    // 1. 计算本月收支
+    const now = new Date();
+    const currentMonth = now.getMonth();
+    const currentYear = now.getFullYear();
+    
+    let monthlyIncome = 0;
+    let monthlyExpense = 0;
+
+    AppState.ledger.forEach(item => {
+      const itemDate = new Date(item.record_date);
+      if (itemDate.getMonth() === currentMonth && itemDate.getFullYear() === currentYear) {
+        if (item.record_type === 'income') {
+          monthlyIncome += item.amount;
+        } else if (item.record_type === 'expense') {
+          monthlyExpense += item.amount;
+        }
+      }
+    });
+
+    const totalAsset = AppState.asset ? AppState.asset.amount : 0;
+    const totalLiability = AppState.liability ? AppState.liability.amount : 0;
+    const netWorth = totalAsset - totalLiability;
+
+    // Update Overview Panel Elements
+    const elNetWorth = document.getElementById('overview-net-worth');
+    const elAssets = document.getElementById('overview-assets');
+    const elLiabilities = document.getElementById('overview-liabilities');
+    const elIncome = document.getElementById('overview-income');
+    const elExpense = document.getElementById('overview-expense');
+
+    if (elNetWorth) {
+        elNetWorth.textContent = `¥${netWorth.toFixed(2)}`;
+        elNetWorth.style.color = netWorth >= 0 ? 'var(--text)' : 'var(--danger)';
+    }
+    if (elAssets) elAssets.textContent = `¥${totalAsset.toFixed(2)}`;
+    if (elLiabilities) elLiabilities.textContent = `¥${totalLiability.toFixed(2)}`;
+    if (elIncome) elIncome.textContent = `¥${monthlyIncome.toFixed(2)}`;
+    if (elExpense) elExpense.textContent = `¥${monthlyExpense.toFixed(2)}`;
+
+    // Update Dashboard Card (Small Card on Main Screen)
+    if (DOM.statLedger) {
+      const netWorthShort = netWorth;
+      DOM.statLedger.textContent = `¥${netWorthShort.toFixed(0)}`;
+      DOM.statLedger.style.color = netWorthShort >= 0 ? 'var(--success)' : 'var(--danger)';
+      DOM.statLedger.title = `净资产: ¥${netWorth.toFixed(2)}`;
+    }
+
+    if (DOM.statLedgerHint) {
+      const assetW = (totalAsset / 10000).toFixed(1) + 'w';
+      const liabilityW = (totalLiability / 10000).toFixed(1) + 'w';
+      DOM.statLedgerHint.innerHTML = `
+        <span style="color:var(--text-accent-muted)">资 ${assetW}</span>
+        <span style="margin:0 2px; opacity:0.3">|</span>
+        <span style="color:var(--danger)">债 ${liabilityW}</span>
+      `;
+    }
+
+    // 2. 渲染列表 (Render List)
+    if (!DOM.ledgerList) return;
+    
+    if (AppState.ledger.length === 0) {
+      DOM.ledgerList.innerHTML = '<div class="empty-state">暂无账单记录</div>';
+      return;
+    }
+
+    // Filter by Type if selected
+    let displayLedger = [...AppState.ledger];
+    if (AppState.ledgerFilterType) {
+        if (AppState.ledgerFilterType === 'debt') {
+             displayLedger = displayLedger.filter(item => item.record_type === 'debt_in' || item.record_type === 'debt_out');
+        } else {
+             displayLedger = displayLedger.filter(item => item.record_type === AppState.ledgerFilterType);
+        }
+    }
+
+    // Filter by Category if selected
+    if (AppState.ledgerFilterCategory) {
+        displayLedger = displayLedger.filter(item => item.category === AppState.ledgerFilterCategory);
+    }
+
+    // Sort by date descending
+    const sortedLedger = displayLedger.sort((a, b) => new Date(b.record_date) - new Date(a.record_date));
+
+    const html = sortedLedger.map(item => {
+      const date = new Date(item.record_date).toLocaleDateString('zh-CN');
+      let amountClass = '';
+      let sign = '';
+      let typeText = '';
+      let typeClass = '';
+      
+      if (item.record_type === 'income') {
+          sign = '+';
+          typeText = '收入';
+          typeClass = 'income';
+          amountClass = 'income';
+      } else if (item.record_type === 'expense') {
+          sign = '-';
+          typeText = '支出';
+          typeClass = 'expense';
+          amountClass = 'expense';
+      } else if (item.record_type === 'debt_in') {
+          sign = '+';
+          typeText = '借入';
+          typeClass = 'debt-in';
+          amountClass = 'debt-in';
+      } else if (item.record_type === 'debt_out') {
+          sign = '-';
+          typeText = '还款';
+          typeClass = 'debt-out';
+          amountClass = 'debt-out';
+      }
+      
+      const interestInfo = (item.record_type === 'debt_out' && item.interest > 0) 
+          ? `<div class="ledger-submeta">额外利息 ¥${item.interest.toFixed(2)}</div>` 
+          : '';
+      
+      return `
+        <div class="ledger-item" data-id="${item.id}">
+          <div class="ledger-header">
+            <div class="ledger-title-wrap">
+              <div class="ledger-title">${escapeHtml(item.item)}</div>
+              ${typeText ? `<span class="ledger-type-badge ${typeClass}">${typeText}</span>` : ''}
+            </div>
+            <div class="ledger-actions">
+              <span class="ledger-amount ${amountClass}">${sign}¥${item.amount.toFixed(2)}</span>
+              <button class="btn btn-secondary btn-small edit-btn" onclick="openEditLedger(${item.id})">编辑</button>
+              <button class="btn btn-danger btn-small delete-btn" onclick="deleteLedger(${item.id})">删除</button>
+            </div>
+          </div>
+          <div class="ledger-meta">
+            <span class="ledger-date">${date}</span>
+            ${item.category ? `<span class="tag-badge">${escapeHtml(item.category)}</span>` : ''}
+            ${item.notes ? `<span class="ledger-notes">${escapeHtml(item.notes)}</span>` : ''}
+          </div>
+          ${interestInfo}
+        </div>
+      `;
+    }).join('');
+
+    DOM.ledgerList.innerHTML = `<div class="ledger-list">${html}</div>`;
+
+    // Render Category Filters
+    renderLedgerFilters();
+  }
+
+  function renderLedgerFilters() {
+      const filterContainer = document.getElementById('ledger-filters');
+      if (!filterContainer) return;
+
+      // Collect all categories
+      const categories = new Set();
+      AppState.ledger.forEach(item => {
+          if (item.category) categories.add(item.category);
+      });
+
+      if (categories.size === 0) {
+          filterContainer.style.display = 'none';
+          return;
+      }
+      filterContainer.style.display = 'flex';
+
+      const activeCategory = AppState.ledgerFilterCategory || null;
+      
+      let html = `<button class="btn btn-ghost btn-small tag-filter-item ${!activeCategory ? 'active' : ''}" onclick="filterLedgerCategory(null)">全部</button>`;
+      
+      categories.forEach(cat => {
+          html += `<button class="btn btn-ghost btn-small tag-filter-item ${activeCategory === cat ? 'active' : ''}" onclick="filterLedgerCategory('${escapeHtml(cat)}')">${escapeHtml(cat)}</button>`;
+      });
+
+      filterContainer.innerHTML = html;
+  }
+
+  function filterLedgerCategory(category) {
+      AppState.ledgerFilterCategory = category;
+      renderLedger();
+  }
+
+  function openLedgerForm() {
+    AppState.editingLedgerId = null;
+    DOM.ledgerItemInput.value = '';
+    DOM.ledgerAmountInput.value = '';
+    DOM.ledgerInterestInput.value = '';
+    DOM.ledgerCategoryInput.value = '';
+    DOM.ledgerNotesInput.value = '';
+    // 默认日期为今天
+    const today = new Date().toISOString().split('T')[0];
+    DOM.ledgerDateInput.value = today;
+    
+    // Reset type and visibility
+    DOM.ledgerTypeSelect.value = 'expense';
+    document.getElementById('ledger-interest-group').style.display = 'none';
+    
+    openModal(DOM.ledgerFormModal);
+  }
+
+  function openEditLedger(id) {
+    const item = AppState.ledger.find(l => l.id === id);
+    if (!item) return;
+    
+    AppState.editingLedgerId = id;
+    DOM.ledgerTypeSelect.value = item.record_type;
+    DOM.ledgerItemInput.value = item.item;
+    DOM.ledgerAmountInput.value = item.amount;
+    DOM.ledgerInterestInput.value = item.interest || '';
+    DOM.ledgerCategoryInput.value = item.category || '';
+    DOM.ledgerNotesInput.value = item.notes || '';
+    DOM.ledgerDateInput.value = item.record_date;
+    
+    // Update visibility
+    const isDebtOut = item.record_type === 'debt_out';
+    document.getElementById('ledger-interest-group').style.display = isDebtOut ? '' : 'none';
+    
+    openModal(DOM.ledgerFormModal);
+  }
+
+  function closeLedgerForm() {
+    closeModal(DOM.ledgerFormModal);
+    AppState.editingLedgerId = null;
+  }
+
+  async function saveLedger() {
+    const record_type = DOM.ledgerTypeSelect.value;
+    const item = DOM.ledgerItemInput.value.trim();
+    const amountStr = DOM.ledgerAmountInput.value.trim();
+    const interestStr = DOM.ledgerInterestInput.value.trim();
+    const category = DOM.ledgerCategoryInput.value.trim();
+    const notes = DOM.ledgerNotesInput.value.trim();
+    const record_date = DOM.ledgerDateInput.value;
+
+    if (!item || !amountStr || !record_date) {
+      showMessage('请填写必填项 (项目, 金额, 日期)', 'warning');
+      return;
+    }
+
+    const amount = parseFloat(amountStr);
+    if (isNaN(amount)) {
+      showMessage('金额格式不正确', 'warning');
+      return;
+    }
+    
+    let interest = 0;
+    if (record_type === 'debt_out') {
+        const val = parseFloat(DOM.ledgerInterestInput.value);
+        if (!isNaN(val)) {
+            interest = val;
+        }
+    }
+
+    try {
+      const payload = { record_type, item, amount, interest, category, notes, record_date };
+      if (AppState.editingLedgerId) {
+        await ApiService.ledger.update(AppState.editingLedgerId, payload);
+        showMessage('账单已更新', 'success');
+      } else {
+        await ApiService.ledger.create(payload);
+        showMessage('账单已添加', 'success');
+      }
+      closeLedgerForm();
+      await fetchLedger();
+    } catch (error) {
+      showMessage('保存失败', 'error');
+      console.error('saveLedger:', error);
+    }
+  }
+
+  async function deleteLedger(id) {
+    if (!confirm('确定要删除这条账单记录吗？')) return;
+    try {
+      await ApiService.ledger.delete(id);
+      showMessage('账单已删除', 'success');
+      await fetchLedger();
+    } catch (error) {
+      showMessage('删除失败', 'error');
+      console.error('deleteLedger:', error);
+    }
+  }
+
+  // ============================================================================
+  // 事件绑定
+  // ============================================================================
+
+  function setupEventListeners() {
+    // 搜索功能已移除，相关事件监听已删除。
+    // 书签区域作为唯一添加入口
+    DOM.openBookmarkFormBtn.addEventListener('click', () => openBookmarkForm());
+    DOM.openTodoFormBtn.addEventListener('click', openTodoForm);
+    DOM.openReminderFormBtn.addEventListener('click', openReminderForm);
+    DOM.openLedgerFormBtn.addEventListener('click', openLedgerForm);
+
+    // Ledger Form
+    DOM.ledgerTypeSelect = document.getElementById('ledger-type-select');
+    DOM.ledgerInterestInput = document.getElementById('ledger-interest-input');
+    
+    DOM.ledgerTypeSelect.addEventListener('change', (e) => {
+        const val = e.target.value;
+        const interestGroup = document.getElementById('ledger-interest-group');
+        if (val === 'debt_out') {
+            interestGroup.style.display = '';
+        } else {
+            interestGroup.style.display = 'none';
+            DOM.ledgerInterestInput.value = '';
+        }
+    });
+
+    DOM.saveLedgerBtn.addEventListener('click', saveLedger);
+    DOM.cancelLedgerFormBtn.addEventListener('click', closeLedgerForm);
+    DOM.closeLedgerFormBtn.addEventListener('click', closeLedgerForm);
+
+    // 循环设置：将“每日”作为循环模式之一（每日不需要到期/提前设置）
+    DOM.reminderRecurringCheckbox.addEventListener('change', (e) => {
+      const visible = e.target.checked ? '' : 'none';
+      document.getElementById('reminder-cycle-group').style.display = visible;
+      if (visible === '') {
+        const mode = DOM.reminderCycleModeSelect.value;
+        DOM.reminderCycleDaysGroup.style.display = (mode === 'days') ? '' : 'none';
+        if (mode === 'daily' || mode === 'month_start') {
+          document.getElementById('reminder-due-group').style.display = 'none';
+          document.getElementById('reminder-advance-group').style.display = 'none';
+        } else {
+          document.getElementById('reminder-due-group').style.display = '';
+          document.getElementById('reminder-advance-group').style.display = '';
+        }
+      } else {
+        DOM.reminderCycleDaysGroup.style.display = 'none';
+        document.getElementById('reminder-due-group').style.display = '';
+        document.getElementById('reminder-advance-group').style.display = '';
+      }
+    });
+
+    DOM.reminderCycleModeSelect.addEventListener('change', (e) => {
+      const val = e.target.value;
+      DOM.reminderCycleDaysGroup.style.display = val === 'days' ? '' : 'none';
+      if (DOM.reminderRecurringCheckbox.checked) {
+        if (val === 'daily' || val === 'month_start') {
+          document.getElementById('reminder-due-group').style.display = 'none';
+          document.getElementById('reminder-advance-group').style.display = 'none';
+        } else {
+          document.getElementById('reminder-due-group').style.display = '';
+          document.getElementById('reminder-advance-group').style.display = '';
+        }
+      }
+    });
+
+    // 编辑表单的循环设置
+    DOM.editReminderRecurringCheckbox.addEventListener('change', (e) => {
+      const visible = e.target.checked ? '' : 'none';
+      document.getElementById('edit-reminder-cycle-group').style.display = visible;
+      if (visible === '') {
+        const mode = DOM.editReminderCycleModeSelect.value;
+        DOM.editReminderCycleDaysGroup.style.display = (mode === 'days') ? '' : 'none';
+        if (mode === 'daily' || mode === 'month_start') {
+          document.getElementById('edit-reminder-due-group').style.display = 'none';
+          document.getElementById('edit-reminder-advance-group').style.display = 'none';
+        } else {
+          document.getElementById('edit-reminder-due-group').style.display = '';
+          document.getElementById('edit-reminder-advance-group').style.display = '';
+        }
+      } else {
+        DOM.editReminderCycleDaysGroup.style.display = 'none';
+        document.getElementById('edit-reminder-due-group').style.display = '';
+        document.getElementById('edit-reminder-advance-group').style.display = '';
+      }
+    });
+
+    DOM.editReminderCycleModeSelect.addEventListener('change', (e) => {
+      const val = e.target.value;
+      DOM.editReminderCycleDaysGroup.style.display = val === 'days' ? '' : 'none';
+      if (DOM.editReminderRecurringCheckbox.checked) {
+        if (val === 'daily' || val === 'month_start') {
+          document.getElementById('edit-reminder-due-group').style.display = 'none';
+          document.getElementById('edit-reminder-advance-group').style.display = 'none';
+        } else {
+          document.getElementById('edit-reminder-due-group').style.display = '';
+          document.getElementById('edit-reminder-advance-group').style.display = '';
+        }
+      }
+    });
+
+    // 待办和提醒：全屏新界面（覆盖层）事件处理
+    const statTodosCard = document.getElementById('stat-todos-card');
+    const statRemindersCard = document.getElementById('stat-reminders-card');
+    const statBookmarksCard = document.getElementById('stat-bookmarks-card');
+    const statServicesCard = document.getElementById('stat-services-card');
+    const statLedgerCard = document.getElementById('stat-ledger-card');
+    const todosModal = document.getElementById('todos-modal');
+    const remindersModal = document.getElementById('reminders-modal');
+    const bookmarksModal = document.getElementById('bookmarks-modal');
+    const servicesModal = document.getElementById('services-modal');
+    const ledgerModal = document.getElementById('ledger-modal');
+    const closeTodosModalBtn = document.getElementById('close-todos-modal-btn');
+    const closeRemindersModalBtn = document.getElementById('close-reminders-modal-btn');
+    const closeBookmarksModalBtn = document.getElementById('close-bookmarks-modal-btn');
+    const closeServicesModalBtn = document.getElementById('close-services-modal-btn');
+    const closeLedgerModalBtn = document.getElementById('close-ledger-modal-btn');
+
+    function closeScreen(screenEl) {
+      if (!screenEl) return;
+      const panelEl = screenEl.querySelector('.screen-panel');
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // 若不支持动画或用户偏好减少动画，直接隐藏
+      if (!panelEl || reduceMotion) {
+        screenEl.classList.remove('show');
+        screenEl.setAttribute('aria-hidden', 'true');
+        // 在隐藏前确保焦点移出 overlay，避免 aria-hidden 覆盖仍有焦点元素导致的可访问性问题
+        try { restoreFocusFrom(screenEl); } catch (e) { /* ignore */ }
+        try { screenEl.inert = true; } catch (e) { /* inert may be unsupported */ }
+        AppState.screenOpen = false;
+        updateBodyOverflow();
+        return;
+      }
+
+      // 防止重复关闭
+      if (screenEl.dataset.closing === '1') return;
+      screenEl.dataset.closing = '1';
+
+      // 添加 closing 类以触发 panel 的淡出下移动画
+      screenEl.classList.add('closing');
+      // 立即去除页面的模糊状态，让来源卡片更快可见
+      document.body.classList.remove('screen-open');
+      // 同步让 overlay 更快淡出并解除遮罩交互（使用内联样式覆盖 .show）
+      try {
+        // 缩短遮罩透明度过渡，使背景更快可见
+        screenEl.style.transition = 'opacity 180ms linear';
+        screenEl.style.opacity = '0';
+        // 允许背景交互尽早发生（但 panel 仍在做动画）
+        screenEl.style.pointerEvents = 'none';
+      } catch (e) {
+        // ignore
+      }
+
+      const onEnd = (e) => {
+        // 确保是 panel 本身的 opacity 过渡结束并且当前仍处于 closing 状态，避免误触发（例如打开时的 transitionend）
+        if (e.target !== panelEl) return;
+        if (e.propertyName && e.propertyName !== 'opacity') return;
+        if (!screenEl.classList.contains('closing') && screenEl.dataset.closing !== '1') return;
+
+        panelEl.removeEventListener('transitionend', onEnd);
+        screenEl.classList.remove('show', 'closing');
+        screenEl.setAttribute('aria-hidden', 'true');
+        try { restoreFocusFrom(screenEl); } catch (e) { /* ignore */ }
+        try { screenEl.inert = true; } catch (e) { /* inert may be unsupported */ }
+        AppState.screenOpen = false;
+        delete screenEl.dataset.closing;
+        // 清理之前设置的内联样式（overlay/transition/pointer-events）
+        screenEl.style.transition = '';
+        screenEl.style.opacity = '';
+        screenEl.style.pointerEvents = '';
+        updateBodyOverflow();
+      };
+
+      panelEl.addEventListener('transitionend', onEnd);
+
+      // 兜底：如果 transitionend 未触发，则在超时后强制清理
+      setTimeout(() => {
+        if (screenEl.dataset.closing === '1') {
+          panelEl.removeEventListener('transitionend', onEnd);
+          screenEl.classList.remove('show', 'closing');
+          screenEl.setAttribute('aria-hidden', 'true');
+          try { restoreFocusFrom(screenEl); } catch (e) { /* ignore */ }
+          try { screenEl.inert = true; } catch (e) { /* inert may be unsupported */ }
+          AppState.screenOpen = false;
+          delete screenEl.dataset.closing;
+          // 清理内联样式
+          screenEl.style.transition = '';
+          screenEl.style.opacity = '';
+          screenEl.style.pointerEvents = '';
+          updateBodyOverflow();
+        }
+      }, 520);
+    }
+
+    function closeAllScreens() {
+      closeScreen(todosModal);
+      closeScreen(remindersModal);
+      closeScreen(bookmarksModal);
+      closeScreen(servicesModal);
+      closeScreen(ledgerModal);
+    }
+
+    function openScreen(screenEl) {
+      if (!screenEl) return;
+      // 互斥：一次只显示一个界面
+      closeAllScreens();
+      // 移除可能残留的 closing 状态和关闭标志，确保打开时不会被之前的关闭流程影响
+      screenEl.classList.remove('closing');
+      if (screenEl.dataset.closing) delete screenEl.dataset.closing;
+
+      // 重置滚动位置
+      const miniBody = screenEl.querySelector('.mini-body');
+      if (miniBody) {
+        miniBody.scrollTop = 0;
+      }
+
+      // 清理可能残留的内联样式（遮罩快速淡出时可能留下）
+      try {
+        screenEl.style.transition = '';
+        screenEl.style.opacity = '';
+        screenEl.style.pointerEvents = '';
+        const panelEl = screenEl.querySelector('.screen-panel');
+        if (panelEl) {
+          panelEl.style.transition = '';
+          panelEl.style.transform = '';
+          panelEl.style.opacity = '';
+          panelEl.style.willChange = '';
+          panelEl.style.transformOrigin = '';
+        }
+      } catch (e) { /* ignore */ }
+
+      screenEl.classList.add('show');
+      screenEl.setAttribute('aria-hidden', 'false');
+      // 当面板打开时移除 inert，确保内部控件可被键盘与辅助技术访问
+      try { screenEl.inert = false; } catch (e) { /* inert 可能在旧浏览器不可用 */ }
+      AppState.screenOpen = true;
+      updateBodyOverflow();
+    }
+
+    // 打开面板（使用与关闭一致的 CSS 过渡，移除 JS 的卡片变形动画以保持一致）
+    function openScreenFromCard(sourceCardEl, screenEl) {
+      if (!screenEl) return;
+      const reduceMotion = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+      // 如果提供了来源卡片，记录其 id（用于关闭时把焦点恢复到来源卡片）
+      try {
+        if (sourceCardEl && sourceCardEl.id) {
+          screenEl.dataset.origin = sourceCardEl.id;
+        } else {
+          delete screenEl.dataset.origin;
+        }
+      } catch (e) { /* ignore */ }
+
+      // 仅调用 openScreen，让 CSS 控制进入动画（与关闭动画对称）
+      openScreen(screenEl);
+
+      // 如果用户偏好减少动画，或不存在来源卡片，则不做额外处理
+      if (reduceMotion || !sourceCardEl) return;
+
+      // 不再执行额外的高亮或变形动画，保持进入与退出视觉一致
+    }
+
+    // 管理 overflow 状态的辅助函数
+    function updateBodyOverflow() {
+      const hasTodosModal = todosModal && todosModal.classList.contains('show');
+      const hasRemindersModal = remindersModal && remindersModal.classList.contains('show');
+      const hasBookmarksModal = bookmarksModal && bookmarksModal.classList.contains('show');
+      const hasServicesModal = servicesModal && servicesModal.classList.contains('show');
+      // Re-fetch to be absolutely sure
+      const _ledgerModal = document.getElementById('ledger-modal');
+      const hasLedgerModal = _ledgerModal && _ledgerModal.classList.contains('show');
+
+      const hasAddTodoModal = DOM.addTodoModal && DOM.addTodoModal.style.display === 'flex';
+      const hasEditTodoModal = DOM.editTodoModal && DOM.editTodoModal.style.display === 'flex';
+      const hasReminderModal = DOM.reminderModal && DOM.reminderModal.style.display === 'flex';
+      const hasBookmarkModal = DOM.bookmarkModal && DOM.bookmarkModal.style.display === 'flex';
+      const hasEditBookmarkModal = DOM.editBookmarkModal && DOM.editBookmarkModal.style.display === 'flex';
+      const hasLedgerFormModal = DOM.ledgerFormModal && DOM.ledgerFormModal.style.display === 'flex';
+
+      // 待办/提醒“新界面”打开时，虚化底层内容（由 CSS 控制）
+      if (hasTodosModal || hasRemindersModal || hasBookmarksModal || hasServicesModal || hasLedgerModal) {
+        document.body.classList.add('screen-open');
+      } else {
+        document.body.classList.remove('screen-open');
+      }
+      
+      if (hasTodosModal || hasRemindersModal || hasBookmarksModal || hasServicesModal || hasLedgerModal || hasAddTodoModal || hasEditTodoModal || hasReminderModal || hasBookmarkModal || hasEditBookmarkModal || hasLedgerFormModal) {
+        document.body.style.overflow = 'hidden';
+      } else {
+        document.body.style.overflow = '';
+      }
+    }
+
+    // 在隐藏 overlay 之前，确保内部获得焦点的元素失去焦点并将焦点恢复到安全位置。
+    // 这样可以避免在对元素或其祖先设置 `aria-hidden` 时造成辅助技术用户无法访问已聚焦项的问题。
+    function restoreFocusFrom(screenEl) {
+      try {
+        const active = document.activeElement;
+        if (!active) return;
+        if (!screenEl.contains(active)) return;
+
+        // 先尝试 blur 当前聚焦元素
+        try { active.blur(); } catch (e) { /* ignore */ }
+
+        // 如果记录了来源元素 id，尝试将焦点移回来源
+        const originId = screenEl.dataset.origin;
+        let target = null;
+        if (originId) target = document.getElementById(originId);
+
+        if (target) {
+          try { target.focus(); } catch (e) { /* ignore */ }
+          return;
+        }
+
+        // 兜底：让 body 临时可聚焦并 focus，随后恢复原状态
+        try {
+          const body = document.body;
+          const prevTab = body.getAttribute('tabindex');
+          body.setAttribute('tabindex', '-1');
+          body.focus();
+          if (prevTab === null) body.removeAttribute('tabindex'); else body.setAttribute('tabindex', prevTab);
+        } catch (e) { /* ignore */ }
+      } catch (e) { /* ignore */ }
+    }
+
+    // 检查是否有任何模态框打开
+    function isAnyScreenOpen() {
+      return (todosModal && todosModal.classList.contains('show')) ||
+             (remindersModal && remindersModal.classList.contains('show')) ||
+             (bookmarksModal && bookmarksModal.classList.contains('show')) ||
+             (servicesModal && servicesModal.classList.contains('show')) ||
+             (ledgerModal && ledgerModal.classList.contains('show'));
+    }
+
+    // 打开待办界面
+    if (statTodosCard && todosModal) {
+      statTodosCard.addEventListener('click', (e) => {
+        // 当任何模态框打开时，完全忽略点击
+        if (AppState.screenOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        
+        e.stopPropagation(); // 防止事件冒泡
+        // 没有任何模态框打开，才能执行打开操作
+        AppState.todoFilterPriority = 'all';
+        document.querySelectorAll('.filter-todo-btn').forEach(b => b.classList.remove('active'));
+        const allBtn = document.querySelector('.filter-todo-btn[data-priority="all"]');
+        if (allBtn) allBtn.classList.add('active');
+        renderTodos();
+        openScreenFromCard(statTodosCard, todosModal);
       });
     }
 
-    // 添加待办
-    async function addTodo() {
-      const input = document.getElementById('newTodo');
-      const title = input.value.trim();
-      if (!title) return alert('请输入待办事项');
-      await fetch(apiBase, {
-        method: 'POST',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title, completed: false})
+    // 打开提醒界面
+    if (statRemindersCard && remindersModal) {
+      statRemindersCard.addEventListener('click', (e) => {
+        // 当任何模态框打开时，完全忽略点击
+        if (AppState.screenOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        
+        e.stopPropagation();
+        openScreenFromCard(statRemindersCard, remindersModal);
       });
-      input.value = '';
-      fetchTodos();
     }
 
-    // 删除待办
-    async function deleteTodo(id) {
-      if (!id) return alert('ID 无效');
-      await fetch(`${apiBase}/${id}`, { method: 'DELETE' });
-      fetchTodos();
-    }
-
-    // 切换完成状态
-    async function toggleTodo(id, title, completed) {
-      await fetch(`${apiBase}/${id}`, {
-        method: 'PUT',
-        headers: {'Content-Type': 'application/json'},
-        body: JSON.stringify({title, completed: !completed})
+    // 打开书签界面
+    if (statBookmarksCard && bookmarksModal) {
+      statBookmarksCard.addEventListener('click', (e) => {
+        // 当任何模态框打开时，完全忽略点击
+        if (AppState.screenOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        
+        e.stopPropagation();
+        openScreenFromCard(statBookmarksCard, bookmarksModal);
       });
-      fetchTodos();
     }
 
-    // 页面加载时获取数据
-    fetchTodos();
-  </script>
+    // 打开服务界面
+    if (statServicesCard && servicesModal) {
+      statServicesCard.addEventListener('click', (e) => {
+        // 当任何模态框打开时，完全忽略点击
+        if (AppState.screenOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        
+        e.stopPropagation();
+        fetchServerStatus();
+        openScreenFromCard(statServicesCard, servicesModal);
+      });
+    }
+
+    // 打开记账界面
+    if (statLedgerCard && ledgerModal) {
+      statLedgerCard.addEventListener('click', (e) => {
+        if (AppState.screenOpen) {
+          e.preventDefault();
+          e.stopPropagation();
+          return;
+        }
+        e.stopPropagation();
+        fetchLedger();
+        openScreenFromCard(statLedgerCard, ledgerModal);
+      });
+    }
+
+    // 点击空白处关闭已禁用：改为不响应遮罩/面板内空白点击，只用显式返回按钮关闭
+    function bindBlankClose(screenEl) {
+      if (!screenEl) return;
+
+      // overlay 点击处理：不再通过点击遮罩关闭界面，仅阻止事件穿透
+      screenEl.addEventListener('click', e => {
+        const panel = e.target && e.target.closest ? e.target.closest('.screen-panel') : null;
+        
+        if (!panel) {
+          // 点击在面板外（遮罩区域） -> 不关闭，仅阻止事件冒泡和默认行为
+          e.stopPropagation();
+          e.preventDefault();
+          return;
+        }
+        // 如果点击在面板上，让事件继续传播给面板的监听器
+      }, true); // 捕获阶段
+
+      // panel 内空白不再关闭：阻止空白区域的点击冒泡以避免意外关闭
+      const panelEl = screenEl.querySelector('.screen-panel');
+      if (!panelEl) return;
+      panelEl.addEventListener('click', e => {
+        const t = e.target;
+        if (!t || !t.closest) return;
+
+        // 任何明显交互控件允许继续（按钮/链接/输入）
+        if (t.closest('button,a,input,textarea,select,option,label')) return;
+
+        // 点在具体内容条目上允许继续
+        if (t.closest('.todo-item,.reminder-item,.bookmark-item,.server-card,.overview-clickable')) return;
+
+        // 其余视作“空白区域”，仅阻止事件冒泡
+        e.stopPropagation();
+      }, true); // 捕获阶段
+    }
+
+    bindBlankClose(todosModal);
+    bindBlankClose(remindersModal);
+    bindBlankClose(bookmarksModal);
+    bindBlankClose(servicesModal);
+    bindBlankClose(ledgerModal);
+
+    // 返回按钮绑定（显式关闭）：仅通过按钮关闭界面，禁用遮罩点击关闭
+    if (closeTodosModalBtn) {
+      closeTodosModalBtn.addEventListener('click', () => {
+        closeScreen(todosModal);
+      });
+    }
+    if (closeRemindersModalBtn) {
+      closeRemindersModalBtn.addEventListener('click', () => {
+        closeScreen(remindersModal);
+      });
+    }
+    if (closeBookmarksModalBtn) {
+      closeBookmarksModalBtn.addEventListener('click', () => {
+        closeScreen(bookmarksModal);
+      });
+    }
+    if (closeServicesModalBtn) {
+      closeServicesModalBtn.addEventListener('click', () => {
+        closeScreen(servicesModal);
+      });
+    }
+    if (closeLedgerModalBtn) {
+      closeLedgerModalBtn.addEventListener('click', () => {
+        closeScreen(ledgerModal);
+        // Reset Ledger View to Overview
+        setTimeout(() => {
+            const ledgerOverviewPanel = document.getElementById('ledger-overview-panel');
+            const ledgerDetailsPanel = document.getElementById('ledger-details-panel');
+            const ledgerBackBtn = document.getElementById('ledger-back-btn');
+            const ledgerModalTitle = document.getElementById('ledger-modal-title');
+            
+            if (ledgerOverviewPanel) ledgerOverviewPanel.style.display = 'flex';
+            if (ledgerDetailsPanel) ledgerDetailsPanel.style.display = 'none';
+            if (ledgerBackBtn) ledgerBackBtn.style.display = 'none';
+            if (ledgerModalTitle) ledgerModalTitle.textContent = '资产总览';
+            
+            AppState.ledgerFilterType = null;
+            AppState.ledgerFilterCategory = null;
+        }, 300);
+      });
+    }
+
+    // Ledger View Toggle Logic
+    const ledgerBackBtn = document.getElementById('ledger-back-btn');
+    const ledgerOverviewPanel = document.getElementById('ledger-overview-panel');
+    const ledgerDetailsPanel = document.getElementById('ledger-details-panel');
+    const ledgerModalTitle = document.getElementById('ledger-modal-title');
+
+    function switchPanel(fromPanel, toPanel, onComplete) {
+        if (!fromPanel || !toPanel) return;
+        
+        // 1. Fade out current
+        fromPanel.classList.add('panel-fade-out');
+        
+        // 2. Wait for transition (match CSS --transition-panel: 420ms)
+        setTimeout(() => {
+            fromPanel.style.display = 'none';
+            fromPanel.classList.remove('panel-fade-out');
+            
+            // 3. Prepare next panel (hidden but display flex)
+            toPanel.classList.add('panel-fade-in');
+            toPanel.style.display = 'flex';
+            
+            // Force reflow
+            void toPanel.offsetWidth;
+            
+            // 4. Fade in next
+            toPanel.classList.remove('panel-fade-in');
+            
+            if (onComplete) onComplete();
+        }, 300); // Slightly faster than full 420ms for snappier feel while keeping the curve
+    }
+
+    function showLedgerDetails(filterType, title) {
+        AppState.ledgerFilterType = filterType;
+        AppState.ledgerFilterCategory = null; // Reset category
+        renderLedger();
+        
+        if (ledgerModalTitle) ledgerModalTitle.textContent = title || '账单明细';
+        if (ledgerBackBtn) ledgerBackBtn.style.display = 'inline-block';
+
+        switchPanel(ledgerOverviewPanel, ledgerDetailsPanel);
+    }
+
+    const cardNetWorth = document.getElementById('overview-card-net-worth');
+    const cardAssets = document.getElementById('overview-card-assets');
+    const cardLiabilities = document.getElementById('overview-card-liabilities');
+    const cardIncome = document.getElementById('overview-card-income');
+    const cardExpense = document.getElementById('overview-card-expense');
+
+    if (cardNetWorth) cardNetWorth.addEventListener('click', () => showLedgerDetails(null, '所有账单'));
+    if (cardAssets) cardAssets.addEventListener('click', () => showLedgerDetails(null, '所有资产'));
+    if (cardLiabilities) cardLiabilities.addEventListener('click', () => showLedgerDetails('debt', '负债明细'));
+    if (cardIncome) cardIncome.addEventListener('click', () => showLedgerDetails('income', '收入明细'));
+    if (cardExpense) cardExpense.addEventListener('click', () => showLedgerDetails('expense', '支出明细'));
+
+    if (ledgerBackBtn) {
+        ledgerBackBtn.addEventListener('click', () => {
+            if (ledgerModalTitle) ledgerModalTitle.textContent = '资产总览';
+            if (ledgerBackBtn) ledgerBackBtn.style.display = 'none';
+            
+            switchPanel(ledgerDetailsPanel, ledgerOverviewPanel, () => {
+                AppState.ledgerFilterType = null;
+                AppState.ledgerFilterCategory = null;
+            });
+        });
+    }
+    if (DOM.refreshServicesBtn) {
+      DOM.refreshServicesBtn.addEventListener('click', fetchServerStatus);
+    }
+
+    // 待办表单
+    DOM.closeAddTodoBtn.addEventListener('click', () => {
+      closeTodoForm();
+      updateBodyOverflow();
+    });
+    DOM.cancelAddTodoBtn.addEventListener('click', () => {
+      closeTodoForm();
+      updateBodyOverflow();
+    });
+    DOM.addTodoBtn.addEventListener('click', () => {
+      addTodo();
+    });
+    DOM.todoInput.addEventListener('keyup', e => {
+      if (e.key === 'Enter') {
+        addTodo();
+      } else if (e.key === 'Escape') {
+        closeTodoForm();
+        updateBodyOverflow();
+      }
+    });
+
+    // 待办编辑
+    DOM.closeEditTodoBtn.addEventListener('click', () => {
+      closeEditTodo();
+      updateBodyOverflow();
+    });
+    DOM.cancelEditTodoBtn.addEventListener('click', () => {
+      closeEditTodo();
+      updateBodyOverflow();
+    });
+    DOM.saveEditTodoBtn.addEventListener('click', saveEditTodo);
+
+    // 提醒表单
+    DOM.closeReminderModalBtn.addEventListener('click', () => {
+      closeReminderForm();
+      updateBodyOverflow();
+    });
+    DOM.cancelReminderBtn.addEventListener('click', () => {
+      closeReminderForm();
+      updateBodyOverflow();
+    });
+    DOM.addReminderBtn.addEventListener('click', addReminder);
+
+    // 待办优先级过滤按钮
+    document.querySelectorAll('.filter-todo-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const priority = btn.dataset.priority;
+        AppState.todoFilterPriority = priority;
+        
+        // 更新按钮激活状态
+        document.querySelectorAll('.filter-todo-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        renderTodos();
+      });
+    });
+
+    // 提醒过滤按钮
+    document.querySelectorAll('.filter-reminder-btn').forEach(btn => {
+      btn.addEventListener('click', () => {
+        const filter = btn.dataset.filter;
+        AppState.reminderFilter = filter;
+        
+        // 更新按钮激活状态
+        document.querySelectorAll('.filter-reminder-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        
+        renderReminders();
+      });
+    });
+
+    // 书签事件（保留）
+    DOM.closeBookmarkModalBtn.addEventListener('click', () => {
+      closeBookmarkForm();
+      updateBodyOverflow();
+    });
+    DOM.cancelBookmarkBtn.addEventListener('click', () => {
+      closeBookmarkForm();
+      updateBodyOverflow();
+    });
+
+    // 标签选择器模态相关事件
+    if (DOM.openTagFilterBtn) DOM.openTagFilterBtn.addEventListener('click', openTagFilter);
+    if (DOM.closeTagFilterBtn) DOM.closeTagFilterBtn.addEventListener('click', () => { 
+      // header X: clear selected filter tags and refresh
+      AppState.bookmarkFilterTags = [];
+      renderBookmarks();
+      closeModal(DOM.tagFilterModal); updateBodyOverflow();
+    });
+    if (DOM.cancelTagFilterBtn) DOM.cancelTagFilterBtn.addEventListener('click', () => { closeModal(DOM.tagFilterModal); updateBodyOverflow(); });
+    if (DOM.closeTagSelectBtn) DOM.closeTagSelectBtn.addEventListener('click', () => { 
+      // header X: clear selected filter tags and refresh
+      AppState.bookmarkFilterTags = [];
+      renderBookmarks();
+      closeTagSelector(); updateBodyOverflow();
+    });
+    if (DOM.cancelTagSelectBtn) DOM.cancelTagSelectBtn.addEventListener('click', () => { closeTagSelector(); updateBodyOverflow(); });
+    
+    // 初始化书签标签编辑器
+    const bookmarkTagsEditor = new TagsEditor(
+      'bookmark-tags-input',
+      'bookmark-tags-container'
+    );
+    
+    // 编辑书签标签编辑器
+    const editBookmarkTagsEditor = new TagsEditor(
+      'edit-bookmark-tags-input',
+      'edit-bookmark-tags-container'
+    );
+    
+    // 保存前同步标签到编辑器
+    function syncBookmarkTags() {
+      return bookmarkTagsEditor.getTags();
+    }
+    
+    function syncEditBookmarkTags() {
+      return editBookmarkTagsEditor.getTags();
+    }
+    
+    // 打开书签表单时初始化编辑器
+    const originalOpenBookmarkForm = openBookmarkForm;
+    openBookmarkForm = function() {
+      originalOpenBookmarkForm();
+      bookmarkTagsEditor.reset();
+    };
+    
+    // 编辑书签时加载标签
+    const originalOpenEditBookmark = openEditBookmark;
+    openEditBookmark = function(id) {
+      originalOpenEditBookmark(id);
+      const bm = AppState.bookmarks.find(b => b.id == id);
+      if (bm && bm.tags) {
+        editBookmarkTagsEditor.setTags(bm.tags);
+      } else {
+        editBookmarkTagsEditor.reset();
+      }
+    };
+    
+    // 覆盖 addBookmark 使用编辑器的标签
+    addBookmark = async function() {
+      const title = DOM.bookmarkTitleInput.value.trim();
+      const url = DOM.bookmarkUrlInput.value.trim();
+      const description = DOM.bookmarkDescriptionInput.value.trim();
+      const tags = syncBookmarkTags();
+      
+      if (!title || !url) {
+        showMessage('请输入名称与网址', 'warning');
+        return;
+      }
+      
+      try {
+        await ApiService.bookmarks.create({ title, url, description, tags });
+        showMessage('书签已添加', 'success');
+        closeBookmarkForm();
+        await fetchBookmarks();
+      } catch (error) {
+        showMessage('添加失败', 'error');
+        console.error('addBookmark:', error);
+      }
+    };
+    
+    // 覆盖 saveEditBookmark 使用编辑器的标签
+    saveEditBookmark = async function() {
+      if (!AppState.editingBookmarkId) return;
+      const title = DOM.editBookmarkTitleInput.value.trim();
+      const url = DOM.editBookmarkUrlInput.value.trim();
+      const description = DOM.editBookmarkDescriptionInput.value.trim();
+      const tags = syncEditBookmarkTags();
+      
+      if (!title || !url) {
+        showMessage('名称与网址不能为空', 'warning');
+        return;
+      }
+      
+      try {
+        await ApiService.bookmarks.update(AppState.editingBookmarkId, { title, url, tags, description });
+        showMessage('书签已更新', 'success');
+        closeEditBookmark();
+        await fetchBookmarks();
+      } catch (error) {
+        showMessage('保存失败', 'error');
+        console.error('saveEditBookmark:', error);
+      }
+    };
+    
+    DOM.addBookmarkBtn.addEventListener('click', addBookmark);
+    DOM.closeEditBookmarkBtn.addEventListener('click', () => {
+      closeEditBookmark();
+      updateBodyOverflow();
+    });
+    DOM.cancelEditBookmarkBtn.addEventListener('click', () => {
+      closeEditBookmark();
+      updateBodyOverflow();
+    });
+    DOM.saveEditBookmarkBtn.addEventListener('click', saveEditBookmark);
+
+    // 编辑提醒事件处理
+    DOM.closeEditReminderBtn.addEventListener('click', () => {
+      closeEditReminder();
+      updateBodyOverflow();
+    });
+    DOM.cancelEditReminderBtn.addEventListener('click', () => {
+      closeEditReminder();
+      updateBodyOverflow();
+    });
+    DOM.saveEditReminderBtn.addEventListener('click', saveEditReminder);
+
+    // 模态框背景点击关闭
+    DOM.addTodoModal.addEventListener('click', e => {
+      if (e.target === DOM.addTodoModal) {
+        closeTodoForm();
+        updateBodyOverflow();
+      }
+    });
+    DOM.editTodoModal.addEventListener('click', e => {
+      if (e.target === DOM.editTodoModal) {
+        closeEditTodo();
+        updateBodyOverflow();
+      }
+    });
+    DOM.reminderModal.addEventListener('click', e => {
+      if (e.target === DOM.reminderModal) {
+        closeReminderForm();
+        updateBodyOverflow();
+      }
+    });
+    DOM.bookmarkModal.addEventListener('click', e => {
+      if (e.target === DOM.bookmarkModal) {
+        closeBookmarkForm();
+        updateBodyOverflow();
+      }
+    });
+    DOM.editBookmarkModal.addEventListener('click', e => {
+      if (e.target === DOM.editBookmarkModal) {
+        closeEditBookmark();
+        updateBodyOverflow();
+      }
+    });
+    DOM.editReminderModal.addEventListener('click', e => {
+      if (e.target === DOM.editReminderModal) {
+        closeEditReminder();
+        updateBodyOverflow();
+      }
+    });
+
+    // When action buttons are hovered/focused, expand card padding to accommodate scaled buttons
+    if (DOM.bookmarkGrid) {
+      DOM.bookmarkGrid.addEventListener('pointerover', e => {
+        const btn = e.target.closest && e.target.closest('.bookmark-block-actions .btn');
+        if (!btn) return;
+        const block = btn.closest && btn.closest('.bookmark-block');
+        if (block) block.classList.add('action-expanded');
+      });
+      DOM.bookmarkGrid.addEventListener('pointerout', e => {
+        const btn = e.target.closest && e.target.closest('.bookmark-block-actions .btn');
+        if (!btn) return;
+        const block = btn.closest && btn.closest('.bookmark-block');
+        if (block) block.classList.remove('action-expanded');
+      });
+      // Keyboard accessibility: focusin/out
+      DOM.bookmarkGrid.addEventListener('focusin', e => {
+        const btn = e.target.closest && e.target.closest('.bookmark-block-actions .btn');
+        if (!btn) return;
+        const block = btn.closest && btn.closest('.bookmark-block');
+        if (block) block.classList.add('action-expanded');
+      });
+      DOM.bookmarkGrid.addEventListener('focusout', e => {
+        const btn = e.target.closest && e.target.closest('.bookmark-block-actions .btn');
+        if (!btn) return;
+        const block = btn.closest && btn.closest('.bookmark-block');
+        if (block) block.classList.remove('action-expanded');
+      });
+    }
+
+    // ESC 键关闭所有弹窗（待办/提醒界面 + modal）
+    document.addEventListener('keydown', e => {
+      if (e.key === 'Escape') {
+        // 先关“待办/提醒”全屏界面
+        closeAllScreens();
+        if (DOM.addTodoModal.style.display === 'flex') {
+          closeTodoForm();
+          updateBodyOverflow();
+        }
+        if (DOM.editTodoModal.style.display === 'flex') {
+          closeEditTodo();
+          updateBodyOverflow();
+        }
+        if (DOM.reminderModal.style.display === 'flex') {
+          closeReminderForm();
+          updateBodyOverflow();
+        }
+        if (DOM.bookmarkModal.style.display === 'flex') {
+          closeBookmarkForm();
+          updateBodyOverflow();
+        }
+        if (DOM.editBookmarkModal.style.display === 'flex') {
+          closeEditBookmark();
+          updateBodyOverflow();
+        }
+      }
+    });
+  }
+
+  // ============================================================================
+  // 应用初始化
+  // ============================================================================
+
+  /**
+   * 初始化应用数据
+   */
+  async function initApp() {
+    await Promise.all([fetchBookmarks(), fetchTodos(), fetchReminders(), fetchServerStatus(), fetchLedger()]);
+  }
+
+  /**
+   * 启动应用
+   */
+  async function start() {
+    // 加载主题
+    try {
+      await Promise.race([
+        fetchAndApplyThemeColor(),
+        new Promise(res => setTimeout(res, 800))
+      ]);
+    } catch (e) {
+      setThemeVariables(FALLBACK_THEME);
+    }
+
+    await fetchAndApplyThemeBackground();
+
+    // 显示内容
+    const loading = document.getElementById('loading');
+    const content = document.getElementById('content');
+    const bgLayer = document.getElementById('bg-layer');
+    
+    if (loading) loading.style.display = 'none';
+    
+    // 触发背景动画
+    if (bgLayer) {
+        // 使用 setTimeout 确保 DOM 更新后触发 transition
+        setTimeout(() => {
+            bgLayer.classList.add('loaded');
+        }, 50);
+    }
+
+    // 背景动画播放大部分后（1.2秒），再显示内容
+    if (content) {
+        content.style.display = 'block';
+        setTimeout(() => {
+            content.classList.add('visible');
+        }, 1200);
+    }
+
+    // 初始时为所有被 aria-hidden 标记的屏幕 overlay 设置 inert，防止其子元素被聚焦
+    try {
+      document.querySelectorAll('.screen-overlay[aria-hidden="true"]').forEach(el => {
+        try { el.inert = true; } catch (e) { /* ignore if unsupported */ }
+      });
+    } catch (e) { /* ignore */ }
+
+    // 绑定事件和初始化数据
+    setupEventListeners();
+    await initApp();
+  }
+
+  // 页面加载完成后启动
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', start);
+  } else {
+    start();
+  }
+</script>
 </body>
 </html>
