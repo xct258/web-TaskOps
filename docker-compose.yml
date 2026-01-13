@@ -1,0 +1,8 @@
+services:
+  taskops:
+    container_name: taskops
+    image: xct258/taskops
+    network_mode: host
+    volumes:
+      - ./data:/app
+    restart: always
