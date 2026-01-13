@@ -11,12 +11,19 @@ from sqlalchemy.exc import OperationalError
 # =====================================================
 # 数据库配置
 # =====================================================
+# main.py 所在目录
+BASE_DIR = Path(__file__).resolve().parent
 
-TODO_DB_URL = "sqlite:///./todos.db"
-REMINDER_DB_URL = "sqlite:///./reminders.db"
-BOOKMARK_DB_URL = "sqlite:///./bookmarks.db"
-SERVER_STATUS_DB_URL = "sqlite:///./server_status_v2.db"
-LEDGER_DB_URL = "sqlite:///./ledger.db"
+# 数据库存放在 data 子文件夹
+DATA_DIR = BASE_DIR / "data"
+DATA_DIR.mkdir(exist_ok=True)  # 如果不存在就创建
+
+# SQLite 数据库路径
+TODO_DB_URL = f"sqlite:///{DATA_DIR / 'todos.db'}"
+REMINDER_DB_URL = f"sqlite:///{DATA_DIR / 'reminders.db'}"
+BOOKMARK_DB_URL = f"sqlite:///{DATA_DIR / 'bookmarks.db'}"
+SERVER_STATUS_DB_URL = f"sqlite:///{DATA_DIR / 'server_status_v2.db'}"
+LEDGER_DB_URL = f"sqlite:///{DATA_DIR / 'ledger.db'}"
 
 todo_engine = create_engine(TODO_DB_URL, connect_args={"check_same_thread": False})
 reminder_engine = create_engine(REMINDER_DB_URL, connect_args={"check_same_thread": False})
