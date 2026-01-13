@@ -4,5 +4,5 @@ services:
     image: xct258/taskops
     network_mode: host
     volumes:
-      - ./data:/app
+      - ./app:/app
     restart: always
