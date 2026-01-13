@@ -29,7 +29,6 @@ mkdir -p /opt/taskops/前端 /opt/taskops/后端 /opt/taskops/nginx
 # 前端
 wget -O /opt/taskops/前端/index.html https://raw.githubusercontent.com/xct258/web-TaskOps/refs/heads/main/前端/index.html
 wget -O /opt/taskops/前端/styles.css https://raw.githubusercontent.com/xct258/web-TaskOps/refs/heads/main/前端/styles.css
-wget -O /opt/taskops/前端/nginx.conf https://raw.githubusercontent.com/xct258/web-TaskOps/refs/heads/main/前端/nginx.conf
 # 后端
 wget -O /opt/taskops/后端/main.py https://raw.githubusercontent.com/xct258/web-TaskOps/refs/heads/main/后端/main.py
 # nginx
