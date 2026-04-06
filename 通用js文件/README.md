@@ -701,14 +701,13 @@ setTimeout(function () {
     <h1>欢迎使用背景切换组件</h1>
     <p>页面主题色将跟随图片接口返回值自动变化。</p>
     <button id="toastBtn">显示提示</button>
-    <button id="refreshBtn">手动切换背景</button>
+    <button onclick="BackgroundSwitcher.init('https://random-image.xct258.top/')" id="refreshBtn">手动切换背景</button>
   </div>
 
   <script
     src="./background-switcher.js"
-    data-api="https://your-image-api.example.com/random"
-    data-interval="60"
-    data-auth="./auth-api.php">
+    data-api="https://random-image.xct258.top/"
+    data-interval="60">
   </script>
   <script src="./popup.js"></script>
   <script>
@@ -716,11 +715,6 @@ setTimeout(function () {
       Toast.success('操作成功');
     });
 
-    document.getElementById('refreshBtn').addEventListener('click', function () {
-      BackgroundSwitcher.init('https://your-image-api.example.com/random', {
-        silent: false
-      });
-    });
   </script>
 </body>
 </html>
