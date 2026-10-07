@@ -11,11 +11,11 @@
 
 调试速查::
 
-    $ curl localhost:8000/ledger | head -c 300
-    $ curl -X POST localhost:8000/ledger -H 'Content-Type: application/json' \\
+    $ curl localhost:8481/ledger | head -c 300
+    $ curl -X POST localhost:8481/ledger -H 'Content-Type: application/json' \\
         -d '{"item":"午餐","amount":22,"record_type":"expense","record_date":"2026-09-10"}'
-    $ curl localhost:8000/asset
-    $ curl -X POST localhost:8000/asset -H 'Content-Type: application/json' -d '{"amount":1000}'
+    $ curl localhost:8481/asset
+    $ curl -X POST localhost:8481/asset -H 'Content-Type: application/json' -d '{"amount":1000}'
 """
 from datetime import date
 from typing import List

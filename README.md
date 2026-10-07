@@ -1,23 +1,22 @@
 # TaskOps 控制台
 
-前端（PHP 页面 + 原生 JS）与后端（FastAPI，多文件工程）通过 nginx 一并托管。
+前端为纯静态页面（原生 HTML/CSS/JS），后端为 FastAPI 多文件工程，二者在同一容器内运行。
 
 ## 运行结构
 
 | 组件 | 技术 | 地址 |
 | --- | --- | --- |
-| Web 入口 | nginx + php-fpm | `http://<主机>:8281` |
-| 前端页面 | `前端/index.php`（php-fpm 执行，端口 9000 回环） | — |
-| 后端接口 | FastAPI + uvicorn | `http://<主机>:8000` |
+| 前端页面 | Python 静态服务器（`http.server`） | `http://<主机>:8281` |
+| 后端接口 | FastAPI + uvicorn | `http://<主机>:8481` |
 
-前端 `前端/js/app.js` 里 `BACKEND = 'http://' + location.hostname + ':8000'`，
-即浏览器直接跨域调用后端 8000 端口（后端已开启全量 CORS）。
+前端 `前端/js/app.js` 里 `BACKEND = 'http://' + location.hostname + ':8481'`，
+即浏览器直接跨域调用后端 8481 端口（后端已开启全量 CORS）。
 
 ## 目录结构
 
 ```
 前端/
-├── index.php          # 页面骨架（注入 API_BASE、静态资源版本号）
+├── index.html         # 纯静态页面（内联 API_BASE）
 ├── css/style.css
 └── js/{app.js,notify.js}
 后端/
@@ -26,10 +25,9 @@
 ├── models.py          # 数据表模型
 ├── utils.py           # 日期 / 循环 / 资金纯函数
 └── routers/           # todos / bookmarks / server / ledger / notes / mindmaps
-nginx/nginx.conf       # 8281 静态 + .php 转发到 php-fpm:9000
 容器构建脚本/
-├── init-components.sh # 镜像构建期：装依赖 + 拉取前后端文件 + 配置 php-fpm
-└── start.sh           # 容器启动：复制文件到 /app、起 uvicorn/php-fpm/nginx
+├── init-components.sh # 镜像构建期：装依赖 + 拉取前后端文件
+└── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
 docker-compose.yml     # network_mode: host，数据卷 ./app:/app
 ```
 
@@ -39,7 +37,7 @@ docker-compose.yml     # network_mode: host，数据卷 ./app:/app
 # 1. 构建镜像（Dockerfile 会自动拉取 容器构建脚本/ 并执行）
 docker build -t xct258/taskops .
 
-# 2. 启动（host 网络，直接占用 8000 / 8281）
+# 2. 启动（host 网络，直接占用 8481 / 8281）
 docker compose up -d
 ```
 

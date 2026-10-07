@@ -11,7 +11,7 @@
 
 启动（在本目录执行）::
 
-    $ uvicorn main:app --host 0.0.0.0 --port 8000
+    $ uvicorn main:app --host 0.0.0.0 --port 8481
 
 或直接::
 
@@ -89,4 +89,4 @@ async def scalar_docs():
 if __name__ == "__main__":
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=8481)

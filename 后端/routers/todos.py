@@ -14,15 +14,15 @@
 
 调试速查::
 
-    $ curl localhost:8000/todos
-    $ curl -X POST localhost:8000/todos -H 'Content-Type: application/json' \\
+    $ curl localhost:8481/todos
+    $ curl -X POST localhost:8481/todos -H 'Content-Type: application/json' \\
         -d '{"title":"交电费","content":"主卧电表","due_time":"2026-09-15","remind_time":"2026-09-14"}'
-    $ curl -X POST localhost:8000/todos -H 'Content-Type: application/json' \\
+    $ curl -X POST localhost:8481/todos -H 'Content-Type: application/json' \\
         -d '{"title":"浇花","content":"阳台","cycle_mode":"daily"}'
-    $ curl -X PUT localhost:8000/todos/1/processed
-    $ curl -X POST localhost:8000/todos/1/undo
-    $ curl -X POST localhost:8000/todos/1/snooze
-    $ curl -X DELETE localhost:8000/todos/1
+    $ curl -X PUT localhost:8481/todos/1/processed
+    $ curl -X POST localhost:8481/todos/1/undo
+    $ curl -X POST localhost:8481/todos/1/snooze
+    $ curl -X DELETE localhost:8481/todos/1
 """
 from datetime import date, datetime, timedelta
 from typing import List

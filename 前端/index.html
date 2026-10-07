@@ -5,15 +5,11 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>控制台</title>
   <link rel="icon" href="data:,">
-  <link rel="stylesheet" href="./css/style.css?v=<?php echo filemtime(__DIR__ . '/css/style.css'); ?>">
-  <script src="./js/notify.js?v=<?php echo filemtime(__DIR__ . '/js/notify.js'); ?>" defer></script>
-  <script src="./js/app.js?v=<?php echo filemtime(__DIR__ . '/js/app.js'); ?>" defer></script>
+  <link rel="stylesheet" href="./css/style.css">
+  <script src="./js/notify.js" defer></script>
+  <script src="./js/app.js" defer></script>
 </head>
 <body>
-<?php
-  // 壁纸接口地址（app.js 的 refreshBg 使用）；轻提示走 ./js/notify.js（Toast）
-  $apiBase = 'https://random-image.xct258.top/';
-?>
   <!-- ═══ 全屏壁纸层 + 加载提示（壁纸就绪后淡出） ═══ -->
   <div id="anime-bg"></div>
   <div id="bg-loader"><span class="spin"></span><span>壁纸加载中…</span></div>
@@ -388,6 +384,6 @@
     </div>
   </div>
 
-  <script>var API_BASE = '<?php echo $apiBase; ?>';</script>
+  <script>var API_BASE = 'https://random-image.xct258.top/';</script>
 </body>
 </html>

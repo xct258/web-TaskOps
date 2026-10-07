@@ -2,13 +2,13 @@
 
 调试速查::
 
-    $ curl localhost:8000/bookmarks
-    $ curl -X POST localhost:8000/bookmarks -H 'Content-Type: application/json' \\
+    $ curl localhost:8481/bookmarks
+    $ curl -X POST localhost:8481/bookmarks -H 'Content-Type: application/json' \\
         -d '{"title":"OpenWrt","url":"openwrt.org","tags":["路由"]}'
-    $ curl -X PUT localhost:8000/bookmarks/1 -H 'Content-Type: application/json' \\
+    $ curl -X PUT localhost:8481/bookmarks/1 -H 'Content-Type: application/json' \\
         -d '{"tags":"路由, 内网"}'
-    $ curl -X POST localhost:8000/bookmarks/1/visit
-    $ curl -X DELETE localhost:8000/bookmarks/1
+    $ curl -X POST localhost:8481/bookmarks/1/visit
+    $ curl -X DELETE localhost:8481/bookmarks/1
 """
 from typing import List
 

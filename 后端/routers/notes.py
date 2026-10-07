@@ -4,12 +4,12 @@
 
 调试速查::
 
-    $ curl localhost:8000/notes
-    $ curl -X POST localhost:8000/notes -H 'Content-Type: application/json' \\
+    $ curl localhost:8481/notes
+    $ curl -X POST localhost:8481/notes -H 'Content-Type: application/json' \\
         -d '{"title":"部署记录","content":"# 步骤\\n1. 拉镜像","tags":["运维"]}'
-    $ curl -X PUT localhost:8000/notes/1 -H 'Content-Type: application/json' \\
+    $ curl -X PUT localhost:8481/notes/1 -H 'Content-Type: application/json' \\
         -d '{"tags":"运维, 内网"}'
-    $ curl -X DELETE localhost:8000/notes/1
+    $ curl -X DELETE localhost:8481/notes/1
 """
 from typing import List
 

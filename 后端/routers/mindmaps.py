@@ -5,12 +5,12 @@ outline 为缩进大纲文本（每行一个节点，缩进层级表示父子关
 
 调试速查::
 
-    $ curl localhost:8000/mindmaps
-    $ curl -X POST localhost:8000/mindmaps -H 'Content-Type: application/json' \\
+    $ curl localhost:8481/mindmaps
+    $ curl -X POST localhost:8481/mindmaps -H 'Content-Type: application/json' \\
         -d '{"title":"知识体系","outline":"根节点\\n  分支一\\n    叶子"}'
-    $ curl -X PUT localhost:8000/mindmaps/1 -H 'Content-Type: application/json' \\
+    $ curl -X PUT localhost:8481/mindmaps/1 -H 'Content-Type: application/json' \\
         -d '{"title":"改名"}'
-    $ curl -X DELETE localhost:8000/mindmaps/1
+    $ curl -X DELETE localhost:8481/mindmaps/1
 """
 from typing import List
 

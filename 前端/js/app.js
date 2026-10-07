@@ -1,12 +1,12 @@
 /* app.js：控制台前端逻辑（五视图 + 壁纸）。
- * 依赖：notify.js（Toast）、index.php 内联注入的 window.API_BASE。
- * 约定：渲染全部输出到 index.php 预置的容器；onclick 内联函数挂全局。
+ * 依赖：notify.js（Toast）、index.html 内联注入的 window.API_BASE。
+ * 约定：渲染全部输出到 index.html 预置的容器；onclick 内联函数挂全局。
  * 添加/编辑走弹窗表单（遮罩单层滚动，键盘只滚表单不改页面布局）；
  * 删除走行内两步确认（点一次变“确认删？”，3 秒内再点执行）。
 'use strict';
 
 /* ═════════ 后端接口层（地址改这里一处即可；https 页面调 http 会被浏览器拦截） ═════════ */
-var BACKEND = 'http://' + location.hostname + ':8000';
+var BACKEND = 'http://' + location.hostname + ':8481';
 
 /* 全局在飞请求计数：网络慢时给统一加载反馈（延迟 180ms 显示，避免快请求闪一下）。
    首屏加载（_boot）期间不显示，内容登场后才开始提示。 */

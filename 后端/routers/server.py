@@ -5,9 +5,9 @@
 
 调试速查::
 
-    $ curl -X POST localhost:8000/server/status -H 'Content-Type: application/json' \\
+    $ curl -X POST localhost:8481/server/status -H 'Content-Type: application/json' \\
         -d '{"server_name":"openwrt","service_name":"wan","content":"光纤在线","is_success":true}'
-    $ curl "localhost:8000/server/status?server_name=openwrt&limit=10"
+    $ curl "localhost:8481/server/status?server_name=openwrt&limit=10"
 """
 from datetime import datetime
 from typing import List, Optional
