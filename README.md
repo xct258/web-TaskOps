@@ -1,50 +1,187 @@
 # TaskOps 控制台
 
-前端为纯静态页面（原生 HTML/CSS/JS），后端为 FastAPI 多文件工程，二者在同一容器内运行。
+个人自用的控制台应用：前端为**纯静态页面**，后端为 **FastAPI 多文件工程**，两者跑在同一个容器里。
+适合内网/个人服务器部署，配合反向代理对外提供单一域名。
 
-## 运行结构
+---
 
-| 组件 | 技术 | 地址 |
-| --- | --- | --- |
-| 前端页面 | Python 静态服务器（`http.server`） | `http://<主机>:8281` |
-| 后端接口 | FastAPI + uvicorn | `http://<主机>:8481` |
+## 一、架构与端口
 
-前端 `前端/js/app.js` 里 `BACKEND = 'http://' + location.hostname + ':8481'`，
-即浏览器直接跨域调用后端 8481 端口（后端已开启全量 CORS）。
+| 组件 | 技术 | 监听 | 对外 |
+| --- | --- | --- | --- |
+| 前端页面 | 原生 HTML/CSS/JS（Python `http.server` 托管） | `8281` | 经反代 |
+| 后端接口 | FastAPI + uvicorn（路由统一 `/api` 前缀） | `8481` | 经反代 |
 
-## 目录结构
+- 前端 `前端/js/app.js`：`BACKEND = location.origin + '/api'`，即**同源**请求 `/api/*`。
+- 后端所有业务路由都挂在 `/api` 下（如 `/api/todos`）。
+- 生产由反向代理把 `/` 转到 `8281`、`/api/` 转到 `8481`，浏览器只访问一个域名，**无跨域**。
+- 直接访问（不走反代）时，`:8281` 没有 `/api`，前端调不到后端，需按第五节配置反代。
+
+---
+
+## 二、目录结构
 
 ```
 前端/
-├── index.html         # 纯静态页面（内联 API_BASE）
+├── index.html         # 页面骨架（内联 API_BASE = 壁纸接口）
 ├── css/style.css
-└── js/{app.js,notify.js}
+└── js/
+    ├── app.js         # 全部业务逻辑（BACKEND = location.origin + '/api'）
+    └── notify.js      # Toast 占位（当前为空实现）
 后端/
-├── main.py            # FastAPI 入口（组装 + 启动）
-├── db.py              # 各域 SQLite 引擎 / 会话
-├── models.py          # 数据表模型
-├── utils.py           # 日期 / 循环 / 资金纯函数
-└── routers/           # todos / bookmarks / server / ledger / notes / mindmaps
+├── main.py            # FastAPI 入口：CORS、lifespan 建表、挂载 /api 路由、/docs
+├── db.py              # 各业务域独立 SQLite 引擎 / 会话工厂
+├── models.py          # 数据表模型（Todo/Bookmark/ServerStatus/Ledger/Asset/Liability/Note/MindMap）
+├── utils.py           # 日期、循环周期、账本资金影响等纯函数
+└── routers/           # 各业务路由：todos / bookmarks / server / ledger / notes / mindmaps
 容器构建脚本/
-├── init-components.sh # 镜像构建期：装依赖 + 拉取前后端文件
+├── init-components.sh # 镜像构建期：装依赖 + 拉取前后端文件 + 安装 7zz
 └── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
-docker-compose.yml     # network_mode: host，数据卷 ./app:/app
+Dockerfile             # 基于 xct258/debian-cn 构建镜像
+docker-compose.yml     # 运行容器（host 网络 + 数据卷 ./app:/app）
 ```
 
-## 构建与运行
+---
+
+## 三、快速开始
+
+### 1. 构建镜像
 
 ```bash
-# 1. 构建镜像（Dockerfile 会自动拉取 容器构建脚本/ 并执行）
 docker build -t xct258/taskops .
+```
 
-# 2. 启动（host 网络，直接占用 8481 / 8281）
+`Dockerfile` 会从 GitHub main 拉取 `容器构建脚本/init-components.sh` 并执行：安装
+`python3 / pip(uvicorn fastapi sqlmodel) / 7zz`，并把前端、后端、脚本下载到 `/opt/taskops`。
+
+> 构建依赖 GitHub main 上的文件已是最新；若刚改过代码，请先推送再构建。
+
+### 2. 启动
+
+```bash
 docker compose up -d
 ```
 
-浏览器访问 `http://<主机>:8281`。
+`docker-compose.yml`：
 
-## 数据持久化
+```yaml
+services:
+  taskops:
+    container_name: taskops
+    image: xct258/taskops
+    network_mode: host        # 直接占用宿主机 8281 / 8481
+    volumes:
+      - ./app:/app            # 代码 + 数据库持久化
+    restart: always
+```
 
-各业务域的 SQLite 文件位于容器内 `/app/后端/data/`，通过 `./app:/app` 卷持久化到宿主机。
-`start.sh` 复制镜像内置文件时使用 `cp -rn`（不覆盖），因此升级镜像不会清空已有数据。
-删除对应 `.db` 后重启即可按新表结构重建（会丢数据，先备份）。
+### 3. 访问
+
+- 经反代：`https://taskops.你的域名.com`（推荐）
+- 直连后端自测：`http://<主机>:8481/api/todos`
+- 后端 API 文档（直连）：`http://<主机>:8481/docs`
+
+---
+
+## 四、容器启动流程
+
+`docker compose up` 后执行 `ENTRYPOINT` 即 `/usr/local/bin/start.sh`：
+
+1. 建目录 `/app/前端`、`/app/后端`、`/app/后端/routers`。
+2. `cp -rn /opt/taskops/{前端,后端}/. /app/...`：把镜像内置代码铺到挂载卷，`-n` 表示**已存在不覆盖**（保住 `data/` 与用户改动）。
+3. `chmod -R a+rX /app/前端`。
+4. 后台启动后端：`uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8481`。
+5. 前台启动前端静态服务器：`python3 -m http.server 8281 --directory /app/前端`（它是容器主进程，退出即容器停止）。
+
+---
+
+## 五、反向代理（Nginx Proxy Manager）
+
+因为前端走相对 `/api`，必须通过反代访问。以 NPM 为例：
+
+### 网络前提
+
+TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bridge 网络里，
+容器内的 `127.0.0.1` 是它自己，够不到宿主机，二选一：
+
+- **NPM 也用 host 网络**：转发目标直接填 `127.0.0.1`（最省事）。
+- **给 NPM 加 host 映射**：`extra_hosts: ["host.docker.internal:host-gateway"]`，目标填 `host.docker.internal`。
+
+### Proxy Host 配置
+
+**前端 Proxy Host**
+
+| 项 | 值 |
+| --- | --- |
+| Domain Names | `taskops.你的域名.com` |
+| Scheme | `http` |
+| Forward Hostname / IP | `127.0.0.1`（或 `host.docker.internal`） |
+| Forward Port | `8281` |
+| SSL | 申请 Let's Encrypt，开启 Force SSL |
+
+**该 Proxy Host 下的 Custom Location（后端）**
+
+| 项 | 值 |
+| --- | --- |
+| Location | `/api` |
+| Scheme | `http` |
+| Forward Hostname / IP | 同上 |
+| Forward Port | `8481` |
+
+> 后端本身就在 `/api` 前缀下，NPM 转发保留原路径且**无需 rewrite**：
+> `/api/todos` 会原样转发到 `8481/api/todos`。
+
+### 可选：把 API 文档也代理出去
+
+再加两个 Custom Location 到 `8481`：`/docs` 与 `/openapi.json`。
+
+### 防火墙
+
+只对外放行 NPM 的 `80/443`；`8281`、`8481` 可只留内网。
+
+---
+
+## 六、数据持久化与升级
+
+- 各业务域 SQLite 文件位于容器内 `/app/后端/data/`，通过 `./app:/app` 持久化到宿主机。
+- `start.sh` 用 `cp -rn` 复制代码，**不覆盖已存在文件**：升级镜像不会清空数据，但也不会自动覆盖卷里已有的旧代码。
+- 改了表结构：删对应 `.db` 后重启，`lifespan` 会按新模型重建（会丢数据，先备份）。
+- 改版升级：如需让卷内代码更新，删掉 `/app` 下对应旧文件再重启，或清空卷（会丢数据）。
+
+---
+
+## 七、后端 API 一览（前缀 `/api`）
+
+| 域 | 方法与路径 |
+| --- | --- |
+| 待办 | `GET/POST /api/todos`、`PUT/DELETE /api/todos/{rid}`、`PUT /api/todos/{rid}/processed`、`POST /api/todos/{rid}/undo`、`POST /api/todos/{rid}/snooze` |
+| 书签 | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{bid}`、`POST /api/bookmarks/{bid}/visit` |
+| 服务监控 | `GET/POST /api/server/status` |
+| 账本 | `GET/POST /api/ledger`、`PUT/DELETE /api/ledger/{ledger_id}` |
+| 资产/负债 | `GET/POST /api/asset`、`GET/POST /api/liability` |
+| 笔记 | `GET/POST /api/notes`、`PUT/DELETE /api/notes/{nid}` |
+| 思维导图 | `GET/POST /api/mindmaps`、`PUT/DELETE /api/mindmaps/{mid}` |
+
+> 在线调试：直连 `http://<主机>:8481/docs`（Scalar 文档，数据来自 `/openapi.json`）。
+
+---
+
+## 八、本地开发 / 调试
+
+- 后端（在本目录执行）：
+  ```bash
+  cd 后端
+  uvicorn main:app --host 0.0.0.0 --port 8481
+  ```
+- 前端：起任意静态服务器即可，例如 `python3 -m http.server 8281 --directory 前端`。
+- 不经反代直连调试时，前端调不到 `/api`，可临时把 `app.js` 的 `BACKEND` 改成
+  `'http://<主机>:8481/api'`（记得改回）。
+
+---
+
+## 九、注意事项
+
+- 后端 CORS 全开且无鉴权，**仅限内网使用，不要直接暴露公网**；对外请通过反代加访问控制。
+- 前端去掉了 PHP 的 `filemtime` 版本号，改 `css/js` 后浏览器可能用旧缓存，需要强刷；
+  如需版本控制可给 `index.html` 里的 `href/src` 手动加 `?v=1`。
+- 用户密码等敏感信息不要提交进仓库。

@@ -53,13 +53,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 路由挂载（顺序无关，都是绝对路径）
-app.include_router(todos.router)
-app.include_router(bookmarks.router)
-app.include_router(server.router)
-app.include_router(ledger.router)
-app.include_router(notes.router)
-app.include_router(mindmaps.router)
+# 路由挂载（统一挂到 /api 前缀，便于 nginx/NPM 反代且与前端同源）
+app.include_router(todos.router, prefix="/api")
+app.include_router(bookmarks.router, prefix="/api")
+app.include_router(server.router, prefix="/api")
+app.include_router(ledger.router, prefix="/api")
+app.include_router(notes.router, prefix="/api")
+app.include_router(mindmaps.router, prefix="/api")
 
 
 @app.get("/docs", include_in_schema=False)
