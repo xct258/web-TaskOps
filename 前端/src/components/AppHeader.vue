@@ -71,32 +71,6 @@ function go(path) {
       </button>
 
       <div class="hidden sm:flex items-center gap-1.5 font-mono text-[11px]">
-        <!-- 资产 -->
-        <button
-          class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
-          title="前往账本"
-          @click="go('/ledger')"
-        >
-          <span class="text-amber-400 font-bold">¥</span>
-          <span>{{ summary.asset == null ? '—' : formatCompact(summary.asset) }}</span>
-          <span v-if="summary.liability" class="text-rose-400 text-[10px]">
-            负债 {{ formatCompact(summary.liability) }}
-          </span>
-        </button>
-
-        <!-- 服务 -->
-        <button
-          class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
-          title="前往服务状态"
-          @click="go('/server')"
-        >
-          <span
-            class="h-1.5 w-1.5 rounded-full animate-pulse"
-            :class="summary.serverUp > 0 ? 'bg-emerald-400' : 'bg-slate-500'"
-          />
-          <span>{{ summary.serverUp }}/{{ summary.serverTotal }} 在线</span>
-        </button>
-
         <!-- 待办 -->
         <button
           class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
