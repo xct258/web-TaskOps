@@ -3,7 +3,6 @@ import { onMounted, onUnmounted } from 'vue'
 
 import AppBackground from '@/components/AppBackground.vue'
 import AppHeader from '@/components/AppHeader.vue'
-import AppNav from '@/components/AppNav.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import { loadSummary } from '@/composables/useSummary'
 import { preloadWallpaper, wallpaperReady } from '@/composables/useWallpaper'
@@ -36,8 +35,7 @@ onUnmounted(() => {
     class="relative z-10 h-full w-full max-w-7xl mx-auto flex flex-col px-3 sm:px-6 py-2.5 sm:py-3.5 overflow-hidden animate-fade-up"
   >
     <AppHeader />
-    <AppNav class="my-2" />
-    <main class="flex-1 min-h-0 overflow-hidden flex flex-col">
+    <main class="flex-1 min-h-0 overflow-hidden flex flex-col mt-2">
       <router-view v-slot="{ Component }">
         <component :is="Component" class="flex-1 min-h-0" />
       </router-view>
