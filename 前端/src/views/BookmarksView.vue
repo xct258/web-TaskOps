@@ -194,6 +194,89 @@ function onOpen(bookmark) {
   }
 }
 
+// 卡片操作菜单：右键 / 长按调起，默认不显示编辑删除按钮。
+const ctxMenu = ref(null) // { x, y, bookmark }
+let pressTimer = null
+let pressFired = false
+
+function openCardMenu(bookmark, x, y) {
+  const w = 160
+  const h = 132
+  const pad = 8
+  ctxMenu.value = {
+    bookmark,
+    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
+    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
+  }
+  window.addEventListener('scroll', closeCardMenu, { capture: true, once: true })
+}
+
+function closeCardMenu() {
+  ctxMenu.value = null
+  pressFired = false
+}
+
+function onCardCtx(bookmark, e) {
+  openCardMenu(bookmark, e.clientX, e.clientY)
+}
+
+function onPressStart(bookmark, e) {
+  if (e.touches.length > 1) return
+  pressFired = false
+  const t = e.touches[0]
+  clearTimeout(pressTimer)
+  pressTimer = setTimeout(() => {
+    pressTimer = null
+    pressFired = true
+    try {
+      navigator.vibrate?.(30)
+    } catch (_) {}
+    openCardMenu(bookmark, t.clientX, t.clientY)
+  }, 550)
+}
+
+function onPressEnd() {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+
+function guardCardClick(e) {
+  // 长按后松手会触发一次 click，用它阻止链接跳转。
+  if (pressFired) {
+    e.preventDefault()
+    e.stopImmediatePropagation()
+    pressFired = false
+  }
+}
+
+function ctxEdit() {
+  const b = ctxMenu.value?.bookmark
+  closeCardMenu()
+  if (b) openEdit(b)
+}
+
+function ctxCopy() {
+  const b = ctxMenu.value?.bookmark
+  closeCardMenu()
+  if (!b?.url) return
+  if (navigator.clipboard?.writeText) {
+    navigator.clipboard.writeText(b.url).then(
+      () => toast.success('链接已复制'),
+      () => toast.error('复制失败'),
+    )
+  } else {
+    toast.error('当前环境不支持复制')
+  }
+}
+
+function ctxDelete() {
+  const b = ctxMenu.value?.bookmark
+  closeCardMenu()
+  if (b) askDelete(b)
+}
+
 function openFirst() {
   const first = renderModel.value.order[0]
   if (first) window.open(first.url, '_blank', 'noopener')
@@ -215,6 +298,10 @@ function toggleSearch() {
 }
 
 function onGlobalKeydown(e) {
+  if (e.key === 'Escape' && ctxMenu.value) {
+    closeCardMenu()
+    return
+  }
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
@@ -336,6 +423,12 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
               rel="noopener noreferrer"
               class="group/item relative flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 hover:border-indigo-400/40 shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden"
               @click="onOpen(entry.b)"
+              @click.capture="guardCardClick"
+              @contextmenu.prevent="onCardCtx(entry.b, $event)"
+              @touchstart.passive="onPressStart(entry.b, $event)"
+              @touchmove="onPressEnd"
+              @touchend="onPressEnd"
+              @touchcancel="onPressEnd"
             >
               <div
                 class="w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-mono text-xs font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
@@ -362,26 +455,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
                   </span>
                 </div>
               </div>
-
-              <div class="flex flex-col items-end gap-1 flex-shrink-0">
-                <div class="flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition">
-                  <button
-                    class="p-0.5 text-slate-500 hover:text-indigo-300"
-                    title="编辑"
-                    @click.prevent.stop="openEdit(entry.b)"
-                  >
-                    <Icon name="edit" :size="13" />
-                  </button>
-                  <button
-                    class="p-0.5 text-slate-500 hover:text-rose-400"
-                    title="删除"
-                    @click.prevent.stop="askDelete(entry.b)"
-                  >
-                    <Icon name="trash" :size="13" />
-                  </button>
-                </div>
-
-              </div>
             </a>
           </div>
         </div>
@@ -394,9 +467,15 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           :href="entry.b.url"
           target="_blank"
           rel="noopener noreferrer"
-          class="group/item relative flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 hover:border-indigo-400/40 shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden"
-          @click="onOpen(entry.b)"
-        >
+              class="group/item relative flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 hover:border-indigo-400/40 shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden"
+              @click="onOpen(entry.b)"
+              @click.capture="guardCardClick"
+              @contextmenu.prevent="onCardCtx(entry.b, $event)"
+              @touchstart.passive="onPressStart(entry.b, $event)"
+              @touchmove="onPressEnd"
+              @touchend="onPressEnd"
+              @touchcancel="onPressEnd"
+            >
           <div
             class="w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-mono text-xs font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
             :class="gradientFor(entry.b.title)"
@@ -407,15 +486,9 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           <div class="overflow-hidden flex-1 min-w-0">
             <div class="flex items-center gap-1.5">
               <span class="text-xs font-semibold text-slate-200 group-hover/item:text-white truncate transition leading-tight">
-                {{ entry.b.title }}
-              </span>
-              <span
-                v-if="entry.index <= 9"
-                class="hidden md:inline-block text-[9px] font-mono px-1 rounded bg-white/5 border border-white/10 text-slate-400"
-              >
-                {{ entry.index }}
-              </span>
-            </div>
+                  {{ entry.b.title }}
+                  </span>
+                </div>
             <div class="text-[10px] text-slate-400 truncate mt-0.5">{{ entry.b.description || entry.b.url }}</div>
             <div v-if="(entry.b.tags || []).length" class="flex items-center gap-1 mt-1 overflow-hidden">
               <span
@@ -427,18 +500,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
                 {{ t }}
               </span>
             </div>
-          </div>
-
-          <div class="flex flex-col items-end gap-1 flex-shrink-0">
-            <div class="flex gap-0.5 opacity-0 group-hover/item:opacity-100 transition">
-              <button class="p-0.5 text-slate-500 hover:text-indigo-300" title="编辑" @click.prevent.stop="openEdit(entry.b)">
-                <Icon name="edit" :size="13" />
-              </button>
-              <button class="p-0.5 text-slate-500 hover:text-rose-400" title="删除" @click.prevent.stop="askDelete(entry.b)">
-                <Icon name="trash" :size="13" />
-              </button>
-            </div>
-            <span v-if="entry.b.visit_count" class="text-[9px] text-slate-500 font-mono">{{ entry.b.visit_count }} 次</span>
           </div>
         </a>
       </div>
@@ -498,5 +559,23 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       :message="pendingDelete ? `确定删除「${pendingDelete.title}」吗？` : ''"
       @confirm="doDelete"
     />
+
+    <!-- 卡片操作菜单：右键 / 长按调起 -->
+    <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
+    <div
+      v-if="ctxMenu"
+      class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
+      :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+    >
+      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
+        编辑
+      </button>
+      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxCopy">
+        复制链接
+      </button>
+      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
+        删除
+      </button>
+    </div>
   </div>
 </template>
