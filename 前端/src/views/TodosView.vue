@@ -46,6 +46,81 @@ const form = reactive({
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
+// 卡片操作菜单：右键 / 长按调起；卡片上只保留完成与推迟两个明确按键。
+const ctxMenu = ref(null) // { x, y, todo }
+let pressTimer = null
+let pressFired = false
+
+function openCardMenu(todo, x, y) {
+  const w = 168
+  const h = 150
+  const pad = 8
+  ctxMenu.value = {
+    todo,
+    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
+    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
+  }
+  window.addEventListener('scroll', closeCardMenu, { capture: true, once: true })
+}
+
+function closeCardMenu() {
+  ctxMenu.value = null
+  pressFired = false
+}
+
+function onCardCtx(todo, e) {
+  openCardMenu(todo, e.clientX, e.clientY)
+}
+
+function onPressStart(todo, e) {
+  if (e.touches.length > 1) return
+  pressFired = false
+  const t = e.touches[0]
+  clearTimeout(pressTimer)
+  pressTimer = setTimeout(() => {
+    pressTimer = null
+    pressFired = true
+    try {
+      navigator.vibrate?.(30)
+    } catch (_) {}
+    openCardMenu(todo, t.clientX, t.clientY)
+  }, 550)
+}
+
+function onPressEnd() {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+
+function guardCardClick(e) {
+  // 长按弹出菜单后松手会补一次 click，用它拦截误触。
+  if (pressFired) {
+    e.preventDefault()
+    e.stopPropagation()
+    pressFired = false
+  }
+}
+
+function ctxEdit() {
+  const todo = ctxMenu.value?.todo
+  closeCardMenu()
+  if (todo) openEdit(todo)
+}
+
+function ctxUndo() {
+  const todo = ctxMenu.value?.todo
+  closeCardMenu()
+  if (todo) undo(todo)
+}
+
+function ctxDelete() {
+  const todo = ctxMenu.value?.todo
+  closeCardMenu()
+  if (todo) askDelete(todo)
+}
+
 const inputClass =
   'w-full px-3 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-sky-400 transition'
 const labelClass = 'block text-slate-400 mb-1'
@@ -281,6 +356,10 @@ function toggleSearch() {
 }
 
 function onSearchKeydown(e) {
+  if (e.key === 'Escape' && ctxMenu.value) {
+    closeCardMenu()
+    return
+  }
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
@@ -368,16 +447,13 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
               !todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < todayISO(),
             'hover:border-sky-400/40': !(!todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < todayISO()),
           }"
+          @click.capture="guardCardClick"
+          @contextmenu.prevent="onCardCtx(todo, $event)"
+          @touchstart.passive="onPressStart(todo, $event)"
+          @touchmove="onPressEnd"
+          @touchend="onPressEnd"
+          @touchcancel="onPressEnd"
         >
-          <button
-            class="mt-0.5 text-slate-400 hover:text-sky-400 transition flex-shrink-0"
-            :title="todo.processed ? '重新打开' : '标记完成'"
-            @click="todo.processed ? reopen(todo) : complete(todo)"
-          >
-            <Icon v-if="todo.processed" name="checkCircle" :size="17" class="text-emerald-400" />
-            <span v-else class="block h-4 w-4 rounded-full border-2 border-slate-500 group-hover:border-sky-400 transition" />
-          </button>
-
           <div class="flex-1 min-w-0">
             <div class="flex items-center gap-1.5 flex-wrap">
               <span
@@ -418,28 +494,33 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
             </div>
           </div>
 
-          <div class="flex flex-col gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+          <div class="flex flex-col items-end gap-1 flex-shrink-0">
+            <button
+              v-if="!todo.processed"
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-mono text-slate-300 bg-white/5 hover:bg-emerald-500/20 hover:text-emerald-300 border border-white/10 transition"
+              title="标记完成"
+              @click.stop="complete(todo)"
+            >
+              <Icon name="check" :size="11" />
+              完成
+            </button>
+            <button
+              v-else
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-mono text-slate-400 bg-white/5 hover:bg-sky-500/20 hover:text-sky-300 border border-white/10 transition"
+              title="重新打开"
+              @click.stop="reopen(todo)"
+            >
+              <Icon name="undo" :size="11" />
+              重开
+            </button>
             <button
               v-if="!todo.processed && todo.need_remind"
-              class="p-1 rounded text-slate-500 hover:text-amber-300 hover:bg-white/5"
+              class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-mono text-slate-300 bg-white/5 hover:bg-amber-500/20 hover:text-amber-300 border border-white/10 transition"
               title="推迟一个周期"
-              @click="snooze(todo)"
+              @click.stop="snooze(todo)"
             >
-              <Icon name="clock" :size="14" />
-            </button>
-            <button
-              v-if="todo.undo_snapshot"
-              class="p-1 rounded text-slate-500 hover:text-sky-300 hover:bg-white/5"
-              title="撤销上一次完成"
-              @click="undo(todo)"
-            >
-              <Icon name="undo" :size="14" />
-            </button>
-            <button class="p-1 rounded text-slate-500 hover:text-sky-300 hover:bg-white/5" title="编辑" @click="openEdit(todo)">
-              <Icon name="edit" :size="14" />
-            </button>
-            <button class="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-white/5" title="删除" @click="askDelete(todo)">
-              <Icon name="trash" :size="14" />
+              <Icon name="clock" :size="11" />
+              推迟
             </button>
           </div>
         </div>
@@ -548,5 +629,29 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       :message="pendingDelete ? `确定删除「${pendingDelete.title}」吗？` : ''"
       @confirm="doDelete"
     />
+
+    <!-- 卡片操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
+    <Teleport to="body">
+      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
+      <div
+        v-if="ctxMenu"
+        class="fixed z-50 w-[168px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      >
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
+          编辑
+        </button>
+        <button
+          v-if="ctxMenu.todo?.undo_snapshot"
+          class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition"
+          @click="ctxUndo"
+        >
+          撤销上一次完成
+        </button>
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
+          删除
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
