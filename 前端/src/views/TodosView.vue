@@ -292,7 +292,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           class="px-2.5 py-1 rounded-xl whitespace-nowrap border transition-all"
           :class="
             filter === f.key
-              ? 'bg-sky-600 text-white shadow-md shadow-sky-600/30 font-bold border-sky-400/40'
+              ? 'bg-sky-600 text-white border-sky-400/40'
               : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
           "
           @click="filter = f.key"
