@@ -60,9 +60,10 @@ const FILTERS = [
 
 const stats = computed(() => {
   const today = todayISO()
-  const total = items.value.length
-  const done = items.value.filter((t) => t.processed).length
-  const overdue = items.value.filter((t) => {
+  const reached = items.value.filter((t) => reachedReminder(t))
+  const total = reached.length
+  const done = reached.filter((t) => t.processed).length
+  const overdue = reached.filter((t) => {
     if (t.processed || !t.need_remind || !t.due_time) return false
     const due = String(t.due_time)
     const advance = t.advance_days ?? 3
