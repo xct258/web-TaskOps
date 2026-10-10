@@ -52,8 +52,6 @@ const labelClass = 'block text-slate-400 mb-1'
 
 const FILTERS = [
   { key: 'pending', label: '待处理' },
-  { key: 'overdue', label: '逾期' },
-  { key: 'today', label: '今日到期' },
   { key: 'done', label: '已完成' },
   { key: 'all', label: '全部' },
 ]
