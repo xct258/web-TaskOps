@@ -299,7 +299,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         >
           {{ f.label }}
           <span v-if="f.key === 'pending'" class="opacity-70">{{ stats.pending }}</span>
-          <span v-else-if="f.key === 'overdue' && stats.overdue" class="opacity-70">{{ stats.overdue }}</span>
+          <span v-else-if="f.key === 'overdue' && stats.overdue" class="text-rose-400 font-bold bg-rose-500/10 px-1 rounded">{{ stats.overdue }}</span>
         </button>
       </div>
 
