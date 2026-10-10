@@ -56,39 +56,8 @@ function go(path) {
 
 <template>
   <header class="flex-shrink-0 flex items-center justify-between gap-3 pb-2.5 border-b border-white/10">
-    <!-- 菜单按钮 + Logo：所有模块导航收进下拉面板 -->
-    <div class="flex items-center gap-2 flex-shrink-0">
-      <div ref="menuWrap" class="relative">
-        <button
-          class="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition"
-          title="导航菜单"
-          @click="toggleMenu"
-        >
-          <Icon name="list" :size="15" />
-        </button>
-        <div
-          v-if="menuOpen"
-          class="absolute left-0 top-full mt-2 z-50 w-44 rounded-xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl p-1.5 space-y-0.5"
-        >
-          <router-link
-            v-for="item in NAV_ITEMS"
-            :key="item.name"
-            :to="item.path"
-            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-mono whitespace-nowrap border transition-all"
-            :class="
-              route.name === item.name
-                ? `${ACTIVE[item.accent]} font-bold border`
-                : 'bg-transparent hover:bg-white/10 text-slate-400 hover:text-slate-200 border-transparent'
-            "
-            @click="closeMenu"
-          >
-            <Icon :name="item.icon" :size="13" />
-            <span>{{ item.title }}</span>
-          </router-link>
-        </div>
-      </div>
-      <!-- Logo + 汇总状态胶囊 -->
-      <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
+    <!-- Logo + 汇总状态胶囊 -->
+    <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden flex-shrink-0">
       <!-- 极简排印 Logo：宽字距等宽大写 + 末尾小色块，无装饰图形 -->
       <button
         class="flex items-center gap-1.5 transition-opacity hover:opacity-70"
@@ -142,7 +111,6 @@ function go(path) {
         </button>
       </div>
     </div>
-    </div>
 
     <!-- 天气 -->
     <div class="flex items-center gap-2 sm:gap-3.5 font-mono flex-shrink-0">
@@ -166,6 +134,37 @@ function go(path) {
       >
         <Icon name="refresh" :size="15" :class="{ 'animate-spin': wallpaperBusy }" />
       </button>
+
+      <!-- 导航菜单：所有模块收进下拉面板 -->
+      <div ref="menuWrap" class="relative">
+        <button
+          class="p-1.5 rounded-xl bg-slate-900/60 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition"
+          title="导航菜单"
+          @click="toggleMenu"
+        >
+          <Icon name="list" :size="15" />
+        </button>
+        <div
+          v-if="menuOpen"
+          class="absolute right-0 top-full mt-2 z-50 w-44 rounded-xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl p-1.5 space-y-0.5"
+        >
+          <router-link
+            v-for="item in NAV_ITEMS"
+            :key="item.name"
+            :to="item.path"
+            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-mono whitespace-nowrap border transition-all"
+            :class="
+              route.name === item.name
+                ? `${ACTIVE[item.accent]} font-bold border`
+                : 'bg-transparent hover:bg-white/10 text-slate-400 hover:text-slate-200 border-transparent'
+            "
+            @click="closeMenu"
+          >
+            <Icon :name="item.icon" :size="13" />
+            <span>{{ item.title }}</span>
+          </router-link>
+        </div>
+      </div>
     </div>
   </header>
 </template>
