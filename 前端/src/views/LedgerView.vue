@@ -226,7 +226,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 </script>
 
 <template>
-  <div class="relative h-full flex flex-col min-h-0">
+  <div class="h-full flex flex-col min-h-0">
     <!-- 资产概览 -->
     <div class="flex-shrink-0 grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2">
       <button
@@ -331,7 +331,6 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 
       <EmptyState
         v-else-if="visible.length === 0"
-        overlay
         icon="wallet"
         title="暂无流水记录"
         description="点击「记一笔」开始记账。"

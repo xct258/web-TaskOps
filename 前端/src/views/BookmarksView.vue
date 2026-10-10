@@ -207,7 +207,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 </script>
 
 <template>
-  <div class="relative h-full flex flex-col min-h-0">
+  <div class="h-full flex flex-col min-h-0">
     <!-- 搜索 + 操作 -->
     <div class="flex-shrink-0 flex items-center justify-between gap-2.5 mb-2">
       <div class="flex items-center gap-1.5">
@@ -288,7 +288,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 
       <EmptyState
         v-else-if="filtered.length === 0"
-        overlay
         icon="search"
         title="没有找到匹配的书签"
         description="试试更换筛选条件，或按 Esc 清空搜索。"
