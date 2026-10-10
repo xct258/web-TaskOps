@@ -65,12 +65,8 @@ const stats = computed(() => {
   const done = reached.filter((t) => t.processed).length
   const overdue = reached.filter((t) => {
     if (t.processed || !t.need_remind || !t.due_time) return false
-    const due = String(t.due_time)
-    const advance = t.advance_days ?? 3
-    // 提醒日期 = 到期日 - 提前天数；只有到达提醒日期才计入逾期展示
-    const remind = new Date(new Date(due).getTime() - advance * 86400000)
-    const remindStr = remind.toISOString().split('T')[0]
-    return remindStr <= today
+    // 已逾期 = 到期日 < 今天（只是到了提醒日的不算逾期）
+    return String(t.due_time).split('T')[0] < today
   }).length
   return { total, done, pending: total - done, overdue }
 })
