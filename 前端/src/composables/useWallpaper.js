@@ -1,7 +1,7 @@
 import { ref } from 'vue'
 
-// 随机壁纸单例：模板同款接口。用 Image 预加载，加载完成再切换，避免闪白。
-const BASE = 'https://random-image.xct258.top/'
+// 随机壁纸单例：临时换为 picsum。预加载，加载完成再切换，避免闪白。
+const BASE = 'https://picsum.photos/1920/1080'
 
 export const wallpaper = ref(`url('${BASE}')`)
 export const wallpaperBusy = ref(false)

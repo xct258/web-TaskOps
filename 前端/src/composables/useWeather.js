@@ -13,14 +13,14 @@ export function decodeWMO(code) {
   return { icon: '⛅', text: '多云' }
 }
 
-const FALLBACK = { lat: 31.2304, lon: 121.4737, label: '上海中心' }
+const FALLBACK = { lat: 30.5928, lon: 114.3055, label: '武汉' }
 
-/** 免 Key 天气：优先浏览器定位，失败回退上海。 */
+/** 免 Key 天气：默认武汉，不获取浏览器定位。 */
 export function useWeather() {
   const icon = ref('🌤️')
   const temp = ref('--°C')
   const desc = ref('')
-  const city = ref('定位中…')
+  const city = ref('武汉')
   const loading = ref(false)
 
   async function load(lat, lon, label) {
@@ -47,15 +47,7 @@ export function useWeather() {
   }
 
   function locate() {
-    if (!navigator.geolocation) {
-      load(FALLBACK.lat, FALLBACK.lon, FALLBACK.label)
-      return
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => load(pos.coords.latitude, pos.coords.longitude, '当前坐标'),
-      () => load(FALLBACK.lat, FALLBACK.lon, FALLBACK.label),
-      { timeout: 8000 },
-    )
+    load(FALLBACK.lat, FALLBACK.lon, FALLBACK.label)
   }
 
   onMounted(locate)

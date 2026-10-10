@@ -3,14 +3,12 @@ import { onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 
 import Icon from '@/components/Icon.vue'
-import { useClock } from '@/composables/useClock'
 import { loadSummary, summary } from '@/composables/useSummary'
 import { refreshWallpaper, wallpaperBusy } from '@/composables/useWallpaper'
 import { useWeather } from '@/composables/useWeather'
 import { formatCompact } from '@/utils/format'
 
 const router = useRouter()
-const { time, date } = useClock()
 const { icon, temp, desc, city } = useWeather()
 
 onMounted(loadSummary)
@@ -78,7 +76,7 @@ function go(path) {
       </div>
     </div>
 
-    <!-- 天气 + 时钟 -->
+    <!-- 天气 -->
     <div class="flex items-center gap-2 sm:gap-3.5 font-mono flex-shrink-0">
       <div
         class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/60 border border-white/10 backdrop-blur-md text-xs"
@@ -100,11 +98,6 @@ function go(path) {
       >
         <Icon name="refresh" :size="15" :class="{ 'animate-spin': wallpaperBusy }" />
       </button>
-
-      <div class="text-right flex flex-col justify-center">
-        <div class="text-base sm:text-xl font-bold text-white tracking-wider leading-none">{{ time }}</div>
-        <div class="text-[9px] text-slate-400 font-medium tracking-wide mt-0.5">{{ date }}</div>
-      </div>
     </div>
   </header>
 </template>
