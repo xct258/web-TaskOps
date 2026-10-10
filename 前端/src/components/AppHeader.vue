@@ -65,7 +65,7 @@ function go(path) {
         @click="go('/bookmarks')"
       >
         <h1 class="text-base sm:text-lg font-mono font-bold tracking-[0.3em] text-white leading-none">
-          PORTAL
+          主页
         </h1>
         <span class="h-1.5 w-1.5 rounded-[2px] bg-indigo-400" />
       </button>

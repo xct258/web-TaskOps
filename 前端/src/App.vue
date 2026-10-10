@@ -25,7 +25,7 @@ onUnmounted(() => {
   <!-- 首屏等待：壁纸就绪前只显示加载提示，不显示正文 -->
   <div v-if="!wallpaperReady" class="relative z-10 h-full w-full flex items-center justify-center">
     <div class="text-center font-mono animate-pulse">
-      <div class="text-xl font-bold tracking-[0.3em] text-white">PORTAL</div>
+      <div class="text-xl font-bold tracking-[0.3em] text-white">主页</div>
       <div class="text-[10px] text-slate-500 tracking-[0.25em] mt-2">LOADING WALLPAPER…</div>
     </div>
   </div>
