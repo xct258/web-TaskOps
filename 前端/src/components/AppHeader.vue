@@ -104,10 +104,7 @@ function go(path) {
           @click="go('/todos')"
         >
           <span class="text-sky-400">✓</span>
-          <span>{{ summary.todoTotal }} 到了提醒</span>
-          <span v-if="summary.todoOverdue" class="text-rose-400">
-            {{ summary.todoOverdue }} 逾期
-          </span>
+          <span>{{ summary.todoTotal }}/{{ summary.todoOverdue }} 待办</span>
         </button>
       </div>
     </div>
