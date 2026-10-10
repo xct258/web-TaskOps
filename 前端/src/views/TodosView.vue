@@ -76,7 +76,7 @@ const stats = computed(() => {
 })
 
 function reachedReminder(t) {
-  if (!t.need_remind || !t.due_time) return false
+  if (!t.need_remind || !t.due_time) return true
   const due = String(t.due_time)
   const advance = t.advance_days ?? 3
   const remind = new Date(new Date(due).getTime() - advance * 86400000)
@@ -97,7 +97,7 @@ function matchesFilter(todo, key) {
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase()
   return items.value
-    .filter((t) => reachedReminder(t))
+    .filter((t) => filter.value === 'all' || reachedReminder(t))
     .filter((t) => matchesFilter(t, filter.value))
     .filter((t) => !q || [t.title, t.content].filter(Boolean).some((f) => String(f).toLowerCase().includes(q)))
     .sort((a, b) => {
