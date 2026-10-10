@@ -46,19 +46,7 @@ const form = reactive({
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
-  const cardCtx = ref(null)
-
-  function openCardCtx(todo, e) {
-    cardCtx.value = {
-      todo,
-      x: Math.max(8, Math.min(e.clientX || 0, window.innerWidth - 160 - 8)),
-      y: Math.max(8, Math.min(e.clientY || 0, window.innerHeight - 140 - 8)),
-    }
-    window.addEventListener('scroll', closeCardCtx, { capture: true, once: true })
-  }
-  function closeCardCtx() { cardCtx.value = null }
-  function ctxEditT() { closeCardCtx(); if (cardCtx.value?.todo) openEdit(cardCtx.value.todo) }
-  function ctxDelT() { closeCardCtx(); if (cardCtx.value?.todo) askDelete(cardCtx.value.todo) }
+const inputClass =
   'w-full px-3 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-sky-400 transition'
 const labelClass = 'block text-slate-400 mb-1'
 
@@ -374,14 +362,12 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         <div
           v-for="todo in visible"
           :key="todo.id"
-          class="group relative flex items-start gap-2.5 p-3 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 border border-white/10 transition-all"
+          class="group relative flex items-start gap-2.5 p-3 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 transition-all"
           :class="{
-            'hover:border-rose-400/40 shadow-rose-500/10':
+            'hover:border-rose-400/40':
               !todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < todayISO(),
             'hover:border-sky-400/40': !(!todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < todayISO()),
           }"
-          @click="onGlobalKeydown"
-          @contextmenu.prevent="openCardCtx(todo, $event)"
         >
           <button
             class="mt-0.5 text-slate-400 hover:text-sky-400 transition flex-shrink-0"
@@ -430,6 +416,31 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
                 上次 {{ formatDate(todo.last_completed_date) }}
               </span>
             </div>
+          </div>
+
+          <div class="flex flex-col gap-0.5 flex-shrink-0 opacity-0 group-hover:opacity-100 transition">
+            <button
+              v-if="!todo.processed && todo.need_remind"
+              class="p-1 rounded text-slate-500 hover:text-amber-300 hover:bg-white/5"
+              title="推迟一个周期"
+              @click="snooze(todo)"
+            >
+              <Icon name="clock" :size="14" />
+            </button>
+            <button
+              v-if="todo.undo_snapshot"
+              class="p-1 rounded text-slate-500 hover:text-sky-300 hover:bg-white/5"
+              title="撤销上一次完成"
+              @click="undo(todo)"
+            >
+              <Icon name="undo" :size="14" />
+            </button>
+            <button class="p-1 rounded text-slate-500 hover:text-sky-300 hover:bg-white/5" title="编辑" @click="openEdit(todo)">
+              <Icon name="edit" :size="14" />
+            </button>
+            <button class="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-white/5" title="删除" @click="askDelete(todo)">
+              <Icon name="trash" :size="14" />
+            </button>
           </div>
         </div>
       </div>
@@ -537,16 +548,5 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       :message="pendingDelete ? `确定删除「${pendingDelete.title}」吗？` : ''"
       @confirm="doDelete"
     />
-
-    <!-- 卡片操作菜单：右键 -->
-    <div v-if="cardCtx" class="fixed inset-0 z-40" @click="closeCardCtx" @contextmenu.prevent="closeCardCtx" />
-    <div
-      v-if="cardCtx"
-      class="fixed z-50 w-40 rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-      :style="{ left: cardCtx.x + 'px', top: cardCtx.y + 'px' }"
-    >
-      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEditT">编辑</button>
-      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelT">删除</button>
-    </div>
   </div>
 </template>
