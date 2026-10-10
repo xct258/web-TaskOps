@@ -208,9 +208,49 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 
 <template>
   <div class="h-full flex flex-col min-h-0">
-    <!-- 搜索 + 操作（搜索放右侧，与其他页一致） -->
-    <div class="flex-shrink-0 flex items-center gap-2.5 mb-2">
-      <div class="flex items-center gap-1.5 ml-auto">
+    <!-- 工具条：标签 + 搜索 + 新建同一行 -->
+    <div class="flex-shrink-0 flex items-center gap-2 mb-2">
+      <!-- 标签过滤 -->
+      <div class="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-mono">
+        <button
+          class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
+          :class="
+            activeTag === 'ALL'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
+              : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
+          "
+          @click="setTag('ALL')"
+        >
+          全部书签
+        </button>
+        <button
+          v-for="tag in allTags"
+          :key="tag"
+          class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
+          :class="
+            activeTag === tag
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
+              : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
+          "
+          @click="setTag(tag)"
+        >
+          {{ tag }}
+        </button>
+        <button
+          v-if="untaggedCount"
+          class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
+          :class="
+            activeTag === '__untagged__'
+              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
+              : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
+          "
+          @click="setTag('__untagged__')"
+        >
+          未分类
+        </button>
+      </div>
+
+      <div class="flex items-center gap-1.5 flex-shrink-0">
         <button
           class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
           title="搜索（/）"
@@ -218,7 +258,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         >
           <Icon name="search" :size="14" />
         </button>
-        <div v-if="searchOpen" class="relative flex-1 min-w-[100px] max-w-[200px]">
+        <div v-if="searchOpen" class="relative min-w-[100px] max-w-[200px]">
           <input
             ref="searchEl"
             v-model="search"
@@ -232,51 +272,11 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       </div>
 
       <button
-        class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white text-xs font-mono transition border border-indigo-400/30 shadow-lg shadow-indigo-500/10"
+        class="flex-shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-indigo-600/80 hover:bg-indigo-600 active:bg-indigo-700 text-white text-xs font-mono transition border border-indigo-400/30 shadow-lg shadow-indigo-500/10"
         @click="openAdd"
       >
         <Icon name="plus" :size="14" />
         <span class="hidden xs:inline">添加书签</span>
-      </button>
-    </div>
-
-    <!-- 标签过滤 -->
-    <div class="flex-shrink-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1 mb-1 text-xs font-mono">
-      <button
-        class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
-        :class="
-          activeTag === 'ALL'
-            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
-            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-        "
-        @click="setTag('ALL')"
-      >
-        全部书签
-      </button>
-      <button
-        v-for="tag in allTags"
-        :key="tag"
-        class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
-        :class="
-          activeTag === tag
-            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
-            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-        "
-        @click="setTag(tag)"
-      >
-        {{ tag }}
-      </button>
-      <button
-        v-if="untaggedCount"
-        class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
-        :class="
-          activeTag === '__untagged__'
-            ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
-            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-        "
-        @click="setTag('__untagged__')"
-      >
-        未分类
       </button>
     </div>
 
