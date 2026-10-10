@@ -198,22 +198,16 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
   <div class="h-full flex flex-col min-h-0">
     <!-- 搜索 + 操作 -->
     <div class="flex-shrink-0 flex items-center justify-between gap-2.5 mb-2">
-      <div class="relative flex-1 max-w-lg">
-        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-          <Icon name="search" :size="14" />
-        </span>
+      <div class="relative flex-1 min-w-[100px] max-w-[200px]">
         <input
           ref="searchEl"
           v-model="search"
           type="text"
-          placeholder="快速筛选书签... (按 '/' 聚焦，Enter 打开首个)"
-          class="w-full pl-9 pr-14 py-1.5 bg-slate-900/60 border border-white/10 focus:border-indigo-400 rounded-xl text-xs text-white placeholder-slate-400 backdrop-blur-md focus:outline-none transition"
+          placeholder="搜索"
+          class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-indigo-400 rounded-lg text-xs text-white placeholder-slate-500 backdrop-blur-md focus:outline-none transition"
           @keydown.enter="openFirst"
           @keydown.esc="search = ''"
         />
-        <span class="absolute inset-y-0 right-0 pr-2.5 flex items-center pointer-events-none">
-          <kbd class="text-[10px] font-mono px-1.5 py-0.5 rounded bg-white/10 text-slate-300 border border-white/10">/</kbd>
-        </span>
       </div>
 
       <button

@@ -266,15 +266,12 @@ onMounted(load)
         </button>
       </div>
 
-      <div class="relative flex-1 min-w-[140px] max-w-xs ml-auto">
-        <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-          <Icon name="search" :size="13" />
-        </span>
+      <div class="relative flex-1 min-w-[100px] max-w-[180px] ml-auto">
         <input
           v-model="search"
           type="text"
-          placeholder="筛选项目 / 分类..."
-          class="w-full pl-8 pr-3 py-1.5 bg-slate-900/60 border border-white/10 focus:border-amber-400 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none transition"
+          placeholder="搜索"
+          class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-amber-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
         />
       </div>
 

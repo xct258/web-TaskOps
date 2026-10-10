@@ -137,15 +137,12 @@ onMounted(load)
       <!-- 左侧列表 -->
       <div class="flex-col min-h-0 w-full md:w-64 lg:w-72 shrink-0" :class="selectedId != null ? 'hidden md:flex' : 'flex'">
         <div class="flex-shrink-0 flex items-center gap-1.5 mb-2">
-          <div class="relative flex-1">
-            <span class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none text-slate-400">
-              <Icon name="search" :size="13" />
-            </span>
+          <div class="relative flex-1 min-w-0">
             <input
               v-model="search"
               type="text"
-              placeholder="搜索笔记..."
-              class="w-full pl-8 pr-3 py-1.5 bg-slate-900/60 border border-white/10 focus:border-violet-400 rounded-xl text-xs text-white placeholder-slate-400 focus:outline-none transition"
+              placeholder="搜索"
+              class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-violet-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
             />
           </div>
           <button
