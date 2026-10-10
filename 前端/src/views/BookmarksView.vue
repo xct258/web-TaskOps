@@ -560,22 +560,24 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       @confirm="doDelete"
     />
 
-    <!-- 卡片操作菜单：右键 / 长按调起 -->
-    <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
-    <div
-      v-if="ctxMenu"
-      class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-      :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-    >
-      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
-        编辑
-      </button>
-      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxCopy">
-        复制链接
-      </button>
-      <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
-        删除
-      </button>
-    </div>
+    <!-- 卡片操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
+    <Teleport to="body">
+      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
+      <div
+        v-if="ctxMenu"
+        class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      >
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
+          编辑
+        </button>
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxCopy">
+          复制链接
+        </button>
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
+          删除
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>

@@ -37,6 +37,11 @@ const form = reactive({
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
+// 流水操作菜单：右键 / 长按调起（Teleport 到 body 避免祖先 transform 影响 fixed 定位）。
+const ctxMenu = ref(null) // { x, y, record }
+let pressTimer = null
+let pressFired = false
+
 const totalsOpen = ref(false)
 const totalsTarget = ref('asset')
 const totalsValue = ref('')
@@ -147,6 +152,63 @@ function askDelete(record) {
   confirmOpen.value = true
 }
 
+// ---- 流水操作菜单：右键 / 长按 ----
+
+function openRecordMenu(record, x, y) {
+  const w = 152
+  const h = 2 * 34 + 12
+  const pad = 8
+  ctxMenu.value = {
+    record,
+    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
+    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
+  }
+  window.addEventListener('scroll', closeRecordMenu, { capture: true, once: true })
+}
+
+function closeRecordMenu() {
+  ctxMenu.value = null
+  pressFired = false
+}
+
+function onRecordCtx(record, e) {
+  openRecordMenu(record, e.clientX, e.clientY)
+}
+
+function onRecordPressStart(record, e) {
+  if (e.touches.length > 1) return
+  pressFired = false
+  const touch = e.touches[0]
+  clearTimeout(pressTimer)
+  pressTimer = setTimeout(() => {
+    pressTimer = null
+    pressFired = true
+    try {
+      navigator.vibrate?.(30)
+    } catch (_) {}
+    openRecordMenu(record, touch.clientX, touch.clientY)
+  }, 550)
+}
+
+function onRecordPressEnd() {
+  if (pressTimer) {
+    clearTimeout(pressTimer)
+    pressTimer = null
+  }
+}
+
+function ctxEdit() {
+  const record = ctxMenu.value?.record
+  closeRecordMenu()
+  if (record) openEdit(record)
+}
+
+function ctxDelete() {
+  const record = ctxMenu.value?.record
+  closeRecordMenu()
+  if (record) askDelete(record)
+}
+
 async function doDelete() {
   if (!pendingDelete.value) return
   try {
@@ -212,6 +274,10 @@ function toggleSearch() {
 function onSearchKeydown(e) {
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
+  if (e.key === 'Escape' && ctxMenu.value) {
+    closeRecordMenu()
+    return
+  }
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
     e.preventDefault()
     openSearch()
@@ -341,6 +407,11 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           v-for="record in visible"
           :key="record.id"
           class="group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 transition"
+          @contextmenu.prevent="onRecordCtx(record, $event)"
+          @touchstart.passive="onRecordPressStart(record, $event)"
+          @touchmove="onRecordPressEnd"
+          @touchend="onRecordPressEnd"
+          @touchcancel="onRecordPressEnd"
         >
           <span
             class="text-[10px] font-mono px-2 py-1 rounded-lg border shrink-0 w-12 text-center"
@@ -374,15 +445,6 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
             <div v-if="record.record_type === 'debt_out' && record.interest" class="text-[9px] text-slate-500 font-mono">
               利息 {{ formatMoney(record.interest) }}
             </div>
-          </div>
-
-          <div class="flex flex-col gap-0.5 opacity-0 group-hover:opacity-100 transition shrink-0">
-            <button class="p-1 rounded text-slate-500 hover:text-amber-300 hover:bg-white/5" title="编辑" @click="openEdit(record)">
-              <Icon name="edit" :size="14" />
-            </button>
-            <button class="p-1 rounded text-slate-500 hover:text-rose-400 hover:bg-white/5" title="删除" @click="askDelete(record)">
-              <Icon name="trash" :size="14" />
-            </button>
           </div>
         </div>
       </div>
@@ -491,6 +553,23 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         </div>
       </template>
     </ModalShell>
+
+    <!-- 流水操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
+    <Teleport to="body">
+      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeRecordMenu" @contextmenu.prevent="closeRecordMenu" />
+      <div
+        v-if="ctxMenu"
+        class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
+        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
+      >
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
+          编辑
+        </button>
+        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
+          删除
+        </button>
+      </div>
+    </Teleport>
 
     <ConfirmDialog
       v-model="confirmOpen"
