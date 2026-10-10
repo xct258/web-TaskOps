@@ -22,6 +22,7 @@ const searchOpen = ref(false)
 const modalOpen = ref(false)
 const editing = ref(null)
 const form = reactive({ title: '', url: '', description: '', tags: '' })
+const tagInput = ref('')
 
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
@@ -86,6 +87,32 @@ async function load() {
 
 function setTag(tag) {
   activeTag.value = tag
+}
+
+function addTag() {
+  const t = tagInput.value.trim()
+  if (!t) return
+  const current = parseTags(form.tags)
+  if (!current.includes(t)) current.push(t)
+  form.tags = current.join(', ')
+  tagInput.value = ''
+}
+
+function removeTag(t) {
+  const current = parseTags(form.tags).filter((x) => x !== t)
+  form.tags = current.join(', ')
+}
+
+function onTagKey(e) {
+  if (e.key === 'Enter' || e.key === ' ' || e.key === 'Spacebar') {
+    e.preventDefault()
+    addTag()
+  }
+  if (e.key === 'Backspace' && !tagInput.value.trim() && parseTags(form.tags).length > 0) {
+    const arr = parseTags(form.tags)
+    arr.pop()
+    form.tags = arr.join(', ')
+  }
 }
 
 function openAdd() {
@@ -446,8 +473,16 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           <input v-model="form.description" :class="inputClass" placeholder="代码仓库与自动化..." @keydown.enter="save" />
         </div>
         <div>
-          <label class="block text-slate-400 mb-1">标签（逗号分隔）</label>
-          <input v-model="form.tags" :class="inputClass" placeholder="开发, 内网, 常用" @keydown.enter="save" />
+          <label class="block text-slate-400 mb-1">标签</label>
+          <div class="flex flex-wrap gap-1.5 items-center bg-slate-950 border border-white/10 rounded-xl px-2 py-1.5 focus-within:border-indigo-400 transition">
+            <template v-for="tag in parseTags(form.tags)" :key="tag">
+              <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-200 text-[10px] font-medium border border-indigo-400/30">
+                {{ tag }}
+                <button type="button" class="hover:text-white" @click="removeTag(tag)">×</button>
+              </span>
+            </template>
+            <input v-model="tagInput" :class="'bg-transparent outline-none text-white text-xs placeholder-slate-500 w-20 flex-1 min-w-[3rem]'" placeholder="输入标签后回车" @keydown="onTagKey" />
+          </div>
         </div>
       </div>
       <template #footer>
