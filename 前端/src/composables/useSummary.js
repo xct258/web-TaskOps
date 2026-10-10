@@ -45,7 +45,7 @@ export async function loadSummary() {
     summary.todoTotal = reachedTodos.length
     summary.todoDone = reachedTodos.filter((t) => t.processed).length
     summary.todoOverdue = todos.filter(
-      (t) => !t.processed && t.need_remind && t.due_time && String(t.due_time) < today,
+      (t) => !t.processed && t.need_remind && t.due_time && String(t.due_time).split('T')[0] < today,
     ).length
     summary.serverTotal = servers.length
     summary.serverUp = servers.filter((s) => s.is_success).length

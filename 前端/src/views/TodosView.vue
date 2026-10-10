@@ -89,7 +89,7 @@ function matchesFilter(todo, key) {
   if (key === 'all') return true
   if (key === 'done') return todo.processed
   if (key === 'pending') return !todo.processed
-  if (key === 'overdue') return !todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < today
+  if (key === 'overdue') return !todo.processed && todo.need_remind && todo.due_time && String(todo.due_time).split('T')[0] < today
   if (key === 'today') return !todo.processed && todo.need_remind && String(todo.due_time) === today
   return true
 }
