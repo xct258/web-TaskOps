@@ -1,9 +1,11 @@
 <script setup>
-import { ref } from 'vue'
+import { computed, ref } from 'vue'
 import { gradientFor, initials, tagColor } from '@/utils/format'
 
 const props = defineProps({ bookmark: { type: Object, required: true } })
 const emit = defineEmits(['open', 'ctx'])
+
+const firstTag = computed(() => (props.bookmark.tags || [])[0])
 
 const pressTimer = ref(null)
 let pressFired = false
@@ -67,22 +69,28 @@ function guardClick(e) {
       class="w-7 h-7 rounded-lg bg-gradient-to-br flex items-center justify-center text-white font-mono text-[10px] font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
       :class="gradientFor(bookmark.title)"
     >
-      {{ initials(bookmark.title) }}
-    </div>
-    <div class="overflow-hidden flex-1 min-w-0">
-      <div
-        class="text-[11px] font-semibold text-slate-200 group-hover/item:text-white truncate leading-tight"
-        :title="bookmark.title"
-      >
-        {{ bookmark.title }}
-      </div>
-      <div class="text-[9px] text-slate-400/90 truncate leading-tight">
-        {{ bookmark.description || bookmark.url }}
-      </div>
-      <div
-        v-if="(bookmark.tags || []).length"
-        class="flex items-center gap-0.5 mt-0.5 overflow-hidden"
-      >
+       {{ initials(bookmark.title) }}
+     </div>
+       <span
+        v-if="firstTag"
+        class="absolute top-1 right-1 text-[8px] px-1 py-0 rounded border opacity-80"
+        :class="tagColor(firstTag)"
+        :title="firstTag"
+        >{{ firstTag }}</span>
+      <div class="overflow-hidden flex-1 min-w-0">
+        <div
+          class="text-[11px] font-semibold text-slate-200 group-hover/item:text-white truncate leading-tight"
+          :title="bookmark.title"
+        >
+          {{ bookmark.title }}
+        </div>
+        <div class="text-[9px] text-slate-400/90 truncate leading-tight">
+          {{ bookmark.description || bookmark.url }}
+        </div>
+        <div
+          v-if="(bookmark.tags || []).length"
+          class="flex items-center gap-0.5 mt-0.5 overflow-hidden"
+        >
         <span
           v-for="t in bookmark.tags.slice(0, 2)"
           :key="t"
