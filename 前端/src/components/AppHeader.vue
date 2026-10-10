@@ -97,13 +97,15 @@ function go(path) {
           <span>{{ summary.serverUp }}/{{ summary.serverTotal }} 在线</span>
         </button>
 
-        <!-- 待办 -->
+        <!-- 待办：有逾期时红色提醒 -->
         <button
-          class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
+          class="flex items-center gap-1 px-2 py-0.5 rounded-lg border transition"
+          :class="summary.todoOverdue > 0 ? 'bg-rose-500/15 border-rose-400/50 text-rose-200' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'"
           title="前往待办"
           @click="go('/todos')"
         >
-          <span class="text-sky-400">✓</span>
+          <span v-if="summary.todoOverdue > 0" class="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
+          <span v-else class="text-sky-400">✓</span>
           <span>{{ summary.todoTotal }}/{{ summary.todoOverdue }} 待办</span>
         </button>
       </div>
