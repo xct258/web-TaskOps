@@ -208,9 +208,9 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
 
 <template>
   <div class="h-full flex flex-col min-h-0">
-    <!-- 搜索 + 操作 -->
-    <div class="flex-shrink-0 flex items-center justify-between gap-2.5 mb-2">
-      <div class="flex items-center gap-1.5">
+    <!-- 搜索 + 操作（搜索放右侧，与其他页一致） -->
+    <div class="flex-shrink-0 flex items-center gap-2.5 mb-2">
+      <div class="flex items-center gap-1.5 ml-auto">
         <button
           class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
           title="搜索（/）"
