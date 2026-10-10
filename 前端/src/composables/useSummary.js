@@ -34,8 +34,16 @@ export async function loadSummary() {
     summary.asset = asset?.amount ?? null
     summary.liability = liability?.amount ?? null
     summary.bookmarkTotal = bookmarks.length
-    summary.todoTotal = todos.length
-    summary.todoDone = todos.filter((t) => t.processed).length
+    const reachedTodos = todos.filter((t) => {
+      if (!t.need_remind || !t.due_time) return false
+      const due = String(t.due_time)
+      const advance = t.advance_days ?? 3
+      const remind = new Date(new Date(due).getTime() - advance * 86400000)
+      const remindStr = remind.toISOString().split('T')[0]
+      return remindStr <= today
+    })
+    summary.todoTotal = reachedTodos.length
+    summary.todoDone = reachedTodos.filter((t) => t.processed).length
     summary.todoOverdue = todos.filter(
       (t) => !t.processed && t.need_remind && t.due_time && String(t.due_time) < today,
     ).length
