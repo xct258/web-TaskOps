@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import { api } from '@/api'
 import EmptyState from '@/components/EmptyState.vue'
@@ -15,6 +15,8 @@ const items = ref([])
 const loading = ref(true)
 const search = ref('')
 const onlyDown = ref(false)
+const searchOpen = ref(false)
+const searchEl = ref(null)
 
 const modalOpen = ref(false)
 const saving = ref(false)
@@ -126,12 +128,37 @@ async function submitReport() {
 }
 
 let timer = null
+function openSearch() {
+  searchOpen.value = true
+  nextTick(() => searchEl.value?.focus())
+}
+
+function closeSearch() {
+  search.value = ''
+  searchOpen.value = false
+}
+
+function toggleSearch() {
+  if (searchOpen.value) closeSearch()
+  else openSearch()
+}
+
+function onSearchKeydown(e) {
+  const tag = document.activeElement?.tagName
+  const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
+  if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+    e.preventDefault()
+    openSearch()
+  }
+}
 onMounted(() => {
   load()
   timer = setInterval(() => load(true), 30000)
+  window.addEventListener('keydown', onSearchKeydown)
 })
 onUnmounted(() => {
   if (timer) clearInterval(timer)
+  window.removeEventListener('keydown', onSearchKeydown)
 })
 </script>
 
@@ -152,12 +179,21 @@ onUnmounted(() => {
         <span class="hidden sm:inline text-slate-500">{{ summaryStats.servers }} 台主机</span>
       </div>
 
-      <div class="relative flex-1 min-w-[100px] max-w-[180px] ml-auto">
+      <button
+        class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition ml-auto"
+        title="搜索（/）"
+        @click="toggleSearch"
+      >
+        <Icon name="search" :size="13" />
+      </button>
+      <div v-if="searchOpen" class="relative min-w-[100px] max-w-[180px]">
         <input
+          ref="searchEl"
           v-model="search"
           type="text"
           placeholder="搜索"
           class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-emerald-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
+          @keydown.esc="closeSearch"
         />
       </div>
 

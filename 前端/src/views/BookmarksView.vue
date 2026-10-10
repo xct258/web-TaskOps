@@ -17,6 +17,7 @@ const loading = ref(true)
 const search = ref('')
 const activeTag = ref('ALL')
 const searchEl = ref(null)
+const searchOpen = ref(false)
 
 const modalOpen = ref(false)
 const editing = ref(null)
@@ -172,13 +173,24 @@ function openFirst() {
 }
 
 function focusSearch() {
+  searchOpen.value = true
   nextTick(() => searchEl.value?.focus())
+}
+
+function closeSearch() {
+  search.value = ''
+  searchOpen.value = false
+}
+
+function toggleSearch() {
+  if (searchOpen.value) closeSearch()
+  else focusSearch()
 }
 
 function onGlobalKeydown(e) {
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
-  if (e.key === '/' && !typing) {
+  if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
     e.preventDefault()
     focusSearch()
   } else if (!typing && e.key >= '1' && e.key <= '9' && !modalOpen.value) {
@@ -198,16 +210,25 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
   <div class="h-full flex flex-col min-h-0">
     <!-- 搜索 + 操作 -->
     <div class="flex-shrink-0 flex items-center justify-between gap-2.5 mb-2">
-      <div class="relative flex-1 min-w-[100px] max-w-[200px]">
-        <input
-          ref="searchEl"
-          v-model="search"
-          type="text"
-          placeholder="搜索"
-          class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-indigo-400 rounded-lg text-xs text-white placeholder-slate-500 backdrop-blur-md focus:outline-none transition"
-          @keydown.enter="openFirst"
-          @keydown.esc="search = ''"
-        />
+      <div class="flex items-center gap-1.5">
+        <button
+          class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
+          title="搜索（/）"
+          @click="toggleSearch"
+        >
+          <Icon name="search" :size="14" />
+        </button>
+        <div v-if="searchOpen" class="relative flex-1 min-w-[100px] max-w-[200px]">
+          <input
+            ref="searchEl"
+            v-model="search"
+            type="text"
+            placeholder="搜索"
+            class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-indigo-400 rounded-lg text-xs text-white placeholder-slate-500 backdrop-blur-md focus:outline-none transition"
+            @keydown.enter="openFirst"
+            @keydown.esc="closeSearch"
+          />
+        </div>
       </div>
 
       <button

@@ -1,5 +1,5 @@
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
 
 import { api } from '@/api'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -25,6 +25,8 @@ const items = ref([])
 const loading = ref(true)
 const filter = ref('pending')
 const search = ref('')
+const searchOpen = ref(false)
+const searchEl = ref(null)
 
 const modalOpen = ref(false)
 const editing = ref(null)
@@ -248,7 +250,35 @@ async function doDelete() {
   }
 }
 
-onMounted(load)
+function openSearch() {
+  searchOpen.value = true
+  nextTick(() => searchEl.value?.focus())
+}
+
+function closeSearch() {
+  search.value = ''
+  searchOpen.value = false
+}
+
+function toggleSearch() {
+  if (searchOpen.value) closeSearch()
+  else openSearch()
+}
+
+function onSearchKeydown(e) {
+  const tag = document.activeElement?.tagName
+  const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
+  if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
+    e.preventDefault()
+    openSearch()
+  }
+}
+
+onMounted(() => {
+  load()
+  window.addEventListener('keydown', onSearchKeydown)
+})
+onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 </script>
 
 <template>
@@ -273,12 +303,21 @@ onMounted(load)
         </button>
       </div>
 
-      <div class="relative flex-1 min-w-[100px] max-w-[180px] ml-auto">
+      <button
+        class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition ml-auto"
+        title="搜索（/）"
+        @click="toggleSearch"
+      >
+        <Icon name="search" :size="13" />
+      </button>
+      <div v-if="searchOpen" class="relative min-w-[100px] max-w-[180px]">
         <input
+          ref="searchEl"
           v-model="search"
           type="text"
           placeholder="搜索"
           class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-sky-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
+          @keydown.esc="closeSearch"
         />
       </div>
 
