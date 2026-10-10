@@ -50,7 +50,7 @@ const filtered = computed(() => {
     return [b.title, b.description, b.url, ...tags]
       .filter(Boolean)
       .some((field) => String(field).toLowerCase().includes(q))
-  })
+  }).sort((a, b) => (b.visit_count || 0) - (a.visit_count || 0))
 })
 
 // 渲染模型：全部 + 无搜索时按首个标签分组，否则平铺；index 用于快捷键提示。
