@@ -349,12 +349,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
                   <span class="text-xs font-semibold text-slate-200 group-hover/item:text-white truncate transition leading-tight">
                     {{ entry.b.title }}
                   </span>
-                  <span
-                    v-if="entry.index <= 9"
-                    class="hidden md:inline-block text-[9px] font-mono px-1 rounded bg-white/5 border border-white/10 text-slate-400"
-                  >
-                    {{ entry.index }}
-                  </span>
                 </div>
                 <div class="text-[10px] text-slate-400 truncate mt-0.5">{{ entry.b.description || entry.b.url }}</div>
                 <div v-if="(entry.b.tags || []).length" class="flex items-center gap-1 mt-1 overflow-hidden">
