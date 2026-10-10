@@ -386,9 +386,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
                     <Icon name="trash" :size="13" />
                   </button>
                 </div>
-                <span v-if="entry.b.visit_count" class="text-[9px] text-slate-500 font-mono">
-                  {{ entry.b.visit_count }} 次
-                </span>
+
               </div>
             </a>
           </div>
