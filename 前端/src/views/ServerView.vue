@@ -163,7 +163,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="h-full flex flex-col min-h-0">
+  <div class="relative h-full flex flex-col min-h-0">
     <!-- 工具条 -->
     <div class="flex-shrink-0 flex flex-wrap items-center gap-2 mb-2">
       <div class="flex items-center gap-2 font-mono text-[11px]">
@@ -230,6 +230,7 @@ onUnmounted(() => {
 
       <EmptyState
         v-else-if="visible.length === 0"
+        overlay
         icon="server"
         title="暂无服务状态"
         description="探针 POST /api/server/status 上报后会出现在这里。"

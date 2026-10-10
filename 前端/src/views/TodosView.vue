@@ -282,7 +282,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 </script>
 
 <template>
-  <div class="h-full flex flex-col min-h-0">
+  <div class="relative h-full flex flex-col min-h-0">
     <!-- 工具条 -->
     <div class="flex-shrink-0 flex flex-wrap items-center gap-2 mb-2">
       <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-mono">
@@ -338,6 +338,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 
       <EmptyState
         v-else-if="visible.length === 0"
+        overlay
         icon="checkCircle"
         title="这里空空如也"
         description="没有符合当前筛选的待办事项。"

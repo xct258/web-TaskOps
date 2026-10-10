@@ -162,7 +162,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 </script>
 
 <template>
-  <div class="h-full flex flex-col min-h-0">
+  <div class="relative h-full flex flex-col min-h-0">
     <div class="flex-1 min-h-0 flex gap-2.5">
       <!-- 左侧列表 -->
       <div class="flex-col min-h-0 w-full md:w-64 lg:w-72 shrink-0" :class="selectedId != null ? 'hidden md:flex' : 'flex'">
@@ -214,7 +214,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 
         <div class="flex-1 min-h-0 overflow-y-auto custom-scroll pr-1 space-y-1.5">
           <div v-if="loading" class="h-full min-h-[8rem] flex items-center justify-center text-slate-500 font-mono text-xs">加载中…</div>
-          <EmptyState v-else-if="visible.length === 0" icon="note" title="暂无笔记" description="点击右上角 + 新建。" />
+          <EmptyState v-else-if="visible.length === 0" overlay icon="note" title="暂无笔记" description="点击右上角 + 新建。" />
           <button
             v-for="note in visible"
             :key="note.id"
