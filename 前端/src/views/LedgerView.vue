@@ -8,9 +8,13 @@ import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
+import { useContextMenu } from '@/composables/useContextMenu'
+import { usePageMenu } from '@/composables/usePageMenu'
 import { RECORD_TYPE_META, RECORD_TYPE_OPTIONS, formatDate, formatMoney, todayISO } from '@/utils/format'
 
 const toast = useToast()
+const menu = useContextMenu()
+const pageMenu = usePageMenu()
 
 const items = ref([])
 const asset = ref(0)
@@ -37,8 +41,7 @@ const form = reactive({
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
-// 流水操作菜单：右键 / 长按调起（Teleport 到 body 避免祖先 transform 影响 fixed 定位）。
-const ctxMenu = ref(null) // { x, y, record }
+// 流水操作菜单：右键 / 长按调起全局菜单。
 let pressTimer = null
 let pressFired = false
 
@@ -154,21 +157,16 @@ function askDelete(record) {
 
 // ---- 流水操作菜单：右键 / 长按 ----
 
-function openRecordMenu(record, x, y) {
-  const w = 152
-  const h = 2 * 34 + 12
-  const pad = 8
-  ctxMenu.value = {
-    record,
-    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
-    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
-  }
-  window.addEventListener('scroll', closeRecordMenu, { capture: true, once: true })
-}
-
-function closeRecordMenu() {
-  ctxMenu.value = null
-  pressFired = false
+function openRecordMenu(record, x, y, fromTouch = false) {
+  menu.open(
+    [
+      { key: 'edit', label: '编辑', action: () => openEdit(record) },
+      { key: 'delete', label: '删除', danger: true, action: () => askDelete(record) },
+    ],
+    x,
+    y,
+    { width: 152, title: record.item, fromTouch },
+  )
 }
 
 function onRecordCtx(record, e) {
@@ -186,7 +184,7 @@ function onRecordPressStart(record, e) {
     try {
       navigator.vibrate?.(30)
     } catch (_) {}
-    openRecordMenu(record, touch.clientX, touch.clientY)
+    openRecordMenu(record, touch.clientX, touch.clientY, true)
   }, 550)
 }
 
@@ -195,18 +193,6 @@ function onRecordPressEnd() {
     clearTimeout(pressTimer)
     pressTimer = null
   }
-}
-
-function ctxEdit() {
-  const record = ctxMenu.value?.record
-  closeRecordMenu()
-  if (record) openEdit(record)
-}
-
-function ctxDelete() {
-  const record = ctxMenu.value?.record
-  closeRecordMenu()
-  if (record) askDelete(record)
 }
 
 async function doDelete() {
@@ -274,10 +260,6 @@ function toggleSearch() {
 function onSearchKeydown(e) {
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
-  if (e.key === 'Escape' && ctxMenu.value) {
-    closeRecordMenu()
-    return
-  }
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
     e.preventDefault()
     openSearch()
@@ -285,6 +267,10 @@ function onSearchKeydown(e) {
 }
 
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'new', label: '记一笔', action: openAdd },
+    { key: 'refresh', label: '刷新', action: load },
+  ], '账本')
   load()
   window.addEventListener('keydown', onSearchKeydown)
 })
@@ -554,22 +540,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       </template>
     </ModalShell>
 
-    <!-- 流水操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
-    <Teleport to="body">
-      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeRecordMenu" @contextmenu.prevent="closeRecordMenu" />
-      <div
-        v-if="ctxMenu"
-        class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-      >
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
-          编辑
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
-          删除
-        </button>
-      </div>
-    </Teleport>
+    <!-- 流水操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
 
     <ConfirmDialog
       v-model="confirmOpen"

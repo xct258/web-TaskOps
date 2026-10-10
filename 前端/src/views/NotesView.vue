@@ -7,10 +7,14 @@ import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
+import { useContextMenu } from '@/composables/useContextMenu'
+import { usePageMenu } from '@/composables/usePageMenu'
 import { parseTags, relativeTime, tagColor } from '@/utils/format'
 import { renderMarkdown } from '@/utils/markdown'
 
 const toast = useToast()
+const menu = useContextMenu()
+const pageMenu = usePageMenu()
 
 const notes = ref([])
 const loading = ref(true)
@@ -26,8 +30,7 @@ const saving = ref(false)
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
-// 笔记操作菜单：右键 / 长按调起（Teleport 到 body 避免祖先 transform 影响 fixed 定位）。
-const ctxMenu = ref(null) // { x, y, note }
+// 笔记操作菜单：右键 / 长按调起全局菜单。
 let pressTimer = null
 let pressFired = false
 
@@ -137,21 +140,16 @@ async function doDelete() {
 
 // ---- 笔记操作菜单：右键 / 长按 ----
 
-function openNoteMenu(note, x, y) {
-  const w = 152
-  const h = 2 * 34 + 12
-  const pad = 8
-  ctxMenu.value = {
-    note,
-    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
-    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
-  }
-  window.addEventListener('scroll', closeNoteMenu, { capture: true, once: true })
-}
-
-function closeNoteMenu() {
-  ctxMenu.value = null
-  pressFired = false
+function openNoteMenu(note, x, y, fromTouch = false) {
+  menu.open(
+    [
+      { key: 'open', label: '打开', action: () => openNote(note) },
+      { key: 'delete', label: '删除', danger: true, action: () => askDeleteNote(note) },
+    ],
+    x,
+    y,
+    { width: 152, title: note.title, fromTouch },
+  )
 }
 
 function onNoteCtx(note, e) {
@@ -169,7 +167,7 @@ function onNotePressStart(note, e) {
     try {
       navigator.vibrate?.(30)
     } catch (_) {}
-    openNoteMenu(note, touch.clientX, touch.clientY)
+    openNoteMenu(note, touch.clientX, touch.clientY, true)
   }, 550)
 }
 
@@ -185,19 +183,11 @@ function onNoteCardClick(note) {
     pressFired = false
     return
   }
-  if (ctxMenu.value) return
+  if (menu.state.visible) return
   openNote(note)
 }
 
-function ctxOpen() {
-  const note = ctxMenu.value?.note
-  closeNoteMenu()
-  if (note) openNote(note)
-}
-
-function ctxDelete() {
-  const note = ctxMenu.value?.note
-  closeNoteMenu()
+function askDeleteNote(note) {
   if (!note) return
   pendingDelete.value = note
   confirmOpen.value = true
@@ -215,10 +205,6 @@ function focusSearch() {
 }
 
 function onSearchKeydown(e) {
-  if (e.key === 'Escape' && ctxMenu.value) {
-    closeNoteMenu()
-    return
-  }
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
   if (typing) return
@@ -230,6 +216,10 @@ function onSearchKeydown(e) {
 }
 
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'new', label: '新建笔记', action: startNew },
+    { key: 'refresh', label: '刷新', action: load },
+  ], '笔记')
   load()
   window.addEventListener('keydown', onSearchKeydown)
 })
@@ -385,22 +375,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       </div>
     </template>
 
-    <!-- 笔记操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
-    <Teleport to="body">
-      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeNoteMenu" @contextmenu.prevent="closeNoteMenu" />
-      <div
-        v-if="ctxMenu"
-        class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-      >
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxOpen">
-          打开
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
-          删除
-        </button>
-      </div>
-    </Teleport>
+    <!-- 笔记操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
 
     <ConfirmDialog
       v-model="confirmOpen"

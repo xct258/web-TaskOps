@@ -3,6 +3,7 @@ import { onMounted, onUnmounted } from 'vue'
 
 import AppBackground from '@/components/AppBackground.vue'
 import AppHeader from '@/components/AppHeader.vue'
+import ContextMenu from '@/components/ContextMenu.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import { loadSummary } from '@/composables/useSummary'
 import { preloadWallpaper, wallpaperReady } from '@/composables/useWallpaper'
@@ -43,4 +44,5 @@ onUnmounted(() => {
   </div>
 
   <ToastHost />
+  <ContextMenu />
 </template>

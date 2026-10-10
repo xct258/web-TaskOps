@@ -28,6 +28,7 @@ body {
 
 body {
   user-select: none;
+  -webkit-touch-callout: none;
 }
 
 /* 可选中区域：正文内容允许复制 */

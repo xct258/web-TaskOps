@@ -6,11 +6,16 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
+import BookmarkTile from '@/components/BookmarkTile.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
-import { gradientFor, initials, parseTags, tagColor } from '@/utils/format'
+import { useContextMenu } from '@/composables/useContextMenu'
+import { usePageMenu } from '@/composables/usePageMenu'
+import { parseTags } from '@/utils/format'
 
 const toast = useToast()
+const menu = useContextMenu()
+const pageMenu = usePageMenu()
 
 const items = ref([])
 const loading = ref(true)
@@ -194,87 +199,37 @@ function onOpen(bookmark) {
   }
 }
 
-// 卡片操作菜单：右键 / 长按调起，默认不显示编辑删除按钮。
-const ctxMenu = ref(null) // { x, y, bookmark }
-let pressTimer = null
-let pressFired = false
-
-function openCardMenu(bookmark, x, y) {
-  const w = 160
-  const h = 132
-  const pad = 8
-  ctxMenu.value = {
-    bookmark,
-    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
-    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
-  }
-  window.addEventListener('scroll', closeCardMenu, { capture: true, once: true })
-}
-
-function closeCardMenu() {
-  ctxMenu.value = null
-  pressFired = false
+// 卡片操作菜单：右键 / 长按调起全局菜单（由 BookmarkTile 组件统一处理）。
+function openCardMenu(bookmark, x, y, fromTouch = false) {
+  menu.open(
+    [
+      { key: 'edit', label: '编辑', action: () => openEdit(bookmark) },
+      { key: 'copy', label: '复制链接', action: () => copyLink(bookmark) },
+      { key: 'delete', label: '删除', danger: true, action: () => askDelete(bookmark) },
+    ],
+    x,
+    y,
+    { width: 152, title: bookmark.title, fromTouch },
+  )
 }
 
 function onCardCtx(bookmark, e) {
-  openCardMenu(bookmark, e.clientX, e.clientY)
+  const x = e?.clientX ?? 0
+  const y = e?.clientY ?? 0
+  openCardMenu(bookmark, x, y, !e?.clientX)
 }
 
-function onPressStart(bookmark, e) {
-  if (e.touches.length > 1) return
-  pressFired = false
-  const t = e.touches[0]
-  clearTimeout(pressTimer)
-  pressTimer = setTimeout(() => {
-    pressTimer = null
-    pressFired = true
-    try {
-      navigator.vibrate?.(30)
-    } catch (_) {}
-    openCardMenu(bookmark, t.clientX, t.clientY)
-  }, 550)
-}
 
-function onPressEnd() {
-  if (pressTimer) {
-    clearTimeout(pressTimer)
-    pressTimer = null
-  }
-}
-
-function guardCardClick(e) {
-  // 长按后松手会触发一次 click，用它阻止链接跳转。
-  if (pressFired) {
-    e.preventDefault()
-    e.stopImmediatePropagation()
-    pressFired = false
-  }
-}
-
-function ctxEdit() {
-  const b = ctxMenu.value?.bookmark
-  closeCardMenu()
-  if (b) openEdit(b)
-}
-
-function ctxCopy() {
-  const b = ctxMenu.value?.bookmark
-  closeCardMenu()
-  if (!b?.url) return
+function copyLink(bookmark) {
+  if (!bookmark?.url) return
   if (navigator.clipboard?.writeText) {
-    navigator.clipboard.writeText(b.url).then(
+    navigator.clipboard.writeText(bookmark.url).then(
       () => toast.success('链接已复制'),
       () => toast.error('复制失败'),
     )
   } else {
     toast.error('当前环境不支持复制')
   }
-}
-
-function ctxDelete() {
-  const b = ctxMenu.value?.bookmark
-  closeCardMenu()
-  if (b) askDelete(b)
 }
 
 function openFirst() {
@@ -298,10 +253,6 @@ function toggleSearch() {
 }
 
 function onGlobalKeydown(e) {
-  if (e.key === 'Escape' && ctxMenu.value) {
-    closeCardMenu()
-    return
-  }
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
@@ -314,6 +265,10 @@ function onGlobalKeydown(e) {
 }
 
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'new', label: '新建书签', action: openAdd },
+    { key: 'refresh', label: '刷新', action: load },
+  ], '书签')
   load()
   window.addEventListener('keydown', onGlobalKeydown)
 })
@@ -407,101 +362,33 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         description="试试更换筛选条件，或按 Esc 清空搜索。"
       />
 
-      <div v-else-if="renderModel.grouped" class="space-y-3.5">
-        <div v-for="group in renderModel.groups" :key="group.tag" class="space-y-2">
-          <div class="flex items-center gap-2 text-xs font-mono font-medium text-slate-400">
+      <div v-else-if="renderModel.grouped" class="space-y-3">
+        <div v-for="group in renderModel.groups" :key="group.tag" class="space-y-1.5">
+          <div class="flex items-center gap-1.5 text-xs font-mono font-medium text-slate-400">
             <span class="w-1.5 h-1.5 rounded-full bg-indigo-400" />
             <span>{{ group.tag }}</span>
             <span class="text-[10px] text-slate-600">({{ group.items.length }})</span>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
-            <a
+          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5">
+            <BookmarkTile
               v-for="entry in group.items"
               :key="entry.b.id"
-              :href="entry.b.url"
-              target="_blank"
-              rel="noopener noreferrer"
-              class="group/item relative flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 hover:border-indigo-400/40 shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden"
-              @click="onOpen(entry.b)"
-              @click.capture="guardCardClick"
-              @contextmenu.prevent="onCardCtx(entry.b, $event)"
-              @touchstart.passive="onPressStart(entry.b, $event)"
-              @touchmove="onPressEnd"
-              @touchend="onPressEnd"
-              @touchcancel="onPressEnd"
-            >
-              <div
-                class="w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-mono text-xs font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
-                :class="gradientFor(entry.b.title)"
-              >
-                {{ initials(entry.b.title) }}
-              </div>
-
-              <div class="overflow-hidden flex-1 min-w-0">
-                <div class="flex items-center gap-1.5">
-                  <span class="text-xs font-semibold text-slate-200 group-hover/item:text-white truncate transition leading-tight">
-                    {{ entry.b.title }}
-                  </span>
-                </div>
-                <div class="text-[10px] text-slate-400 truncate mt-0.5">{{ entry.b.description || entry.b.url }}</div>
-                <div v-if="(entry.b.tags || []).length" class="flex items-center gap-1 mt-1 overflow-hidden">
-                  <span
-                    v-for="t in entry.b.tags.slice(0, 3)"
-                    :key="t"
-                    class="text-[9px] px-1.5 py-px rounded-md border whitespace-nowrap"
-                    :class="tagColor(t)"
-                  >
-                    {{ t }}
-                  </span>
-                </div>
-              </div>
-            </a>
+              :bookmark="entry.b"
+              @open="onOpen"
+              @ctx="onCardCtx"
+            />
           </div>
         </div>
       </div>
 
-      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 sm:gap-3">
-        <a
+      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5">
+        <BookmarkTile
           v-for="entry in renderModel.list"
           :key="entry.b.id"
-          :href="entry.b.url"
-          target="_blank"
-          rel="noopener noreferrer"
-              class="group/item relative flex items-center gap-2.5 p-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 hover:border-indigo-400/40 shadow-lg hover:shadow-indigo-500/10 transition-all duration-200 overflow-hidden"
-              @click="onOpen(entry.b)"
-              @click.capture="guardCardClick"
-              @contextmenu.prevent="onCardCtx(entry.b, $event)"
-              @touchstart.passive="onPressStart(entry.b, $event)"
-              @touchmove="onPressEnd"
-              @touchend="onPressEnd"
-              @touchcancel="onPressEnd"
-            >
-          <div
-            class="w-9 h-9 rounded-xl bg-gradient-to-br flex items-center justify-center text-white font-mono text-xs font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
-            :class="gradientFor(entry.b.title)"
-          >
-            {{ initials(entry.b.title) }}
-          </div>
-
-          <div class="overflow-hidden flex-1 min-w-0">
-            <div class="flex items-center gap-1.5">
-              <span class="text-xs font-semibold text-slate-200 group-hover/item:text-white truncate transition leading-tight">
-                  {{ entry.b.title }}
-                  </span>
-                </div>
-            <div class="text-[10px] text-slate-400 truncate mt-0.5">{{ entry.b.description || entry.b.url }}</div>
-            <div v-if="(entry.b.tags || []).length" class="flex items-center gap-1 mt-1 overflow-hidden">
-              <span
-                v-for="t in entry.b.tags.slice(0, 3)"
-                :key="t"
-                class="text-[9px] px-1.5 py-px rounded-md border whitespace-nowrap"
-                :class="tagColor(t)"
-              >
-                {{ t }}
-              </span>
-            </div>
-          </div>
-        </a>
+          :bookmark="entry.b"
+          @open="onOpen"
+          @ctx="onCardCtx"
+        />
       </div>
     </div>
 
@@ -560,24 +447,6 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
       @confirm="doDelete"
     />
 
-    <!-- 卡片操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
-    <Teleport to="body">
-      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
-      <div
-        v-if="ctxMenu"
-        class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-      >
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
-          编辑
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxCopy">
-          复制链接
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
-          删除
-        </button>
-      </div>
-    </Teleport>
+    <!-- 卡片操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
   </div>
 </template>

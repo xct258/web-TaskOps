@@ -8,6 +8,8 @@ import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
+import { useContextMenu } from '@/composables/useContextMenu'
+import { usePageMenu } from '@/composables/usePageMenu'
 import {
   CYCLE_LABELS,
   CYCLE_OPTIONS,
@@ -20,6 +22,8 @@ import {
 } from '@/utils/format'
 
 const toast = useToast()
+const menu = useContextMenu()
+const pageMenu = usePageMenu()
 
 const items = ref([])
 const loading = ref(true)
@@ -46,26 +50,17 @@ const form = reactive({
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
-// 卡片操作菜单：右键 / 长按调起；卡片上只保留完成与推迟两个明确按键。
-const ctxMenu = ref(null) // { x, y, todo }
+// 卡片操作菜单：右键 / 长按调起全局菜单；卡片上只保留完成与推迟两个明确按键。
 let pressTimer = null
 let pressFired = false
 
-function openCardMenu(todo, x, y) {
-  const w = 168
-  const h = 150
-  const pad = 8
-  ctxMenu.value = {
-    todo,
-    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
-    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
+function openCardMenu(todo, x, y, fromTouch = false) {
+  const menuItems = [{ key: 'edit', label: '编辑', action: () => openEdit(todo) }]
+  if (todo?.undo_snapshot) {
+    menuItems.push({ key: 'undo', label: '撤销上一次完成', action: () => undo(todo) })
   }
-  window.addEventListener('scroll', closeCardMenu, { capture: true, once: true })
-}
-
-function closeCardMenu() {
-  ctxMenu.value = null
-  pressFired = false
+  menuItems.push({ key: 'delete', label: '删除', danger: true, action: () => askDelete(todo) })
+  menu.open(menuItems, x, y, { title: todo?.content, fromTouch })
 }
 
 function onCardCtx(todo, e) {
@@ -83,7 +78,7 @@ function onPressStart(todo, e) {
     try {
       navigator.vibrate?.(30)
     } catch (_) {}
-    openCardMenu(todo, t.clientX, t.clientY)
+    openCardMenu(todo, t.clientX, t.clientY, true)
   }, 550)
 }
 
@@ -101,24 +96,6 @@ function guardCardClick(e) {
     e.stopPropagation()
     pressFired = false
   }
-}
-
-function ctxEdit() {
-  const todo = ctxMenu.value?.todo
-  closeCardMenu()
-  if (todo) openEdit(todo)
-}
-
-function ctxUndo() {
-  const todo = ctxMenu.value?.todo
-  closeCardMenu()
-  if (todo) undo(todo)
-}
-
-function ctxDelete() {
-  const todo = ctxMenu.value?.todo
-  closeCardMenu()
-  if (todo) askDelete(todo)
 }
 
 const inputClass =
@@ -356,10 +333,6 @@ function toggleSearch() {
 }
 
 function onSearchKeydown(e) {
-  if (e.key === 'Escape' && ctxMenu.value) {
-    closeCardMenu()
-    return
-  }
   const tag = document.activeElement?.tagName
   const typing = ['INPUT', 'SELECT', 'TEXTAREA'].includes(tag)
   if ((e.key === '/' && !typing) || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
@@ -369,6 +342,10 @@ function onSearchKeydown(e) {
 }
 
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'new', label: '新建待办', action: openAdd },
+    { key: 'refresh', label: '刷新', action: load },
+  ], '待办')
   load()
   window.addEventListener('keydown', onSearchKeydown)
 })
@@ -630,28 +607,6 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       @confirm="doDelete"
     />
 
-    <!-- 卡片操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
-    <Teleport to="body">
-      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
-      <div
-        v-if="ctxMenu"
-        class="fixed z-50 w-[168px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-      >
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
-          编辑
-        </button>
-        <button
-          v-if="ctxMenu.todo?.undo_snapshot"
-          class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition"
-          @click="ctxUndo"
-        >
-          撤销上一次完成
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="ctxDelete">
-          删除
-        </button>
-      </div>
-    </Teleport>
+    <!-- 卡片操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
   </div>
 </template>

@@ -7,9 +7,11 @@ import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
+import { usePageMenu } from '@/composables/usePageMenu'
 import { formatDateTime, relativeTime } from '@/utils/format'
 
 const toast = useToast()
+const pageMenu = usePageMenu()
 
 const items = ref([])
 const loading = ref(true)
@@ -152,6 +154,10 @@ function onSearchKeydown(e) {
   }
 }
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'report', label: '上报状态', action: openReport },
+    { key: 'refresh', label: '刷新', action: () => load() },
+  ], '服务')
   load()
   timer = setInterval(() => load(true), 30000)
   window.addEventListener('keydown', onSearchKeydown)

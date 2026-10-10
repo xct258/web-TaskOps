@@ -7,6 +7,8 @@ import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
+import { useContextMenu } from '@/composables/useContextMenu'
+import { usePageMenu } from '@/composables/usePageMenu'
 import { relativeTime } from '@/utils/format'
 import {
   branchColor,
@@ -21,6 +23,8 @@ import {
 import { exportPng, exportSvg } from '@/utils/mindmapExport'
 
 const toast = useToast()
+const menu = useContextMenu()
+const pageMenu = usePageMenu()
 
 const items = ref([])
 const loading = ref(true)
@@ -44,13 +48,9 @@ const matchCursor = ref(0)
 const hoverUid = ref(null)
 const selectedUid = ref(null)
 
-// 节点操作菜单：右键 / 长按调起（与书签、待办一致）。
-const ctxMenu = ref(null) // { x, y, uid, depth }
+// 节点 / 卡片操作菜单：右键 / 长按调起全局菜单。
 let pressTimer = null
 let pressFired = false
-
-// 导图卡片操作菜单：右键 / 长按调起。
-const cardMenu = ref(null) // { x, y, map }
 let cardPressTimer = null
 let cardPressFired = false
 const pendingDelete = ref(null)
@@ -346,25 +346,18 @@ function removeNode(uid) {
 
 // ---- 节点操作菜单：右键 / 长按 ----
 
-function openNodeMenu(node, x, y) {
-  const items = node.depth > 0 ? 4 : 2
-  const w = 176
-  const h = items * 34 + 12
-  const pad = 8
+function openNodeMenu(node, x, y, fromTouch = false) {
   selectedUid.value = node.uid
-  ctxMenu.value = {
-    uid: node.uid,
-    depth: node.depth,
-    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
-    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
+  const menuItems = [
+    { key: 'edit', label: '编辑文字', action: () => startEditNode(node.uid) },
+    { key: 'child', label: '添加子节点', action: () => addChild(node.uid) },
+  ]
+  if (node.depth > 0) {
+    menuItems.push({ key: 'sibling', label: '添加兄弟节点', action: () => addSibling(node.uid) })
+    menuItems.push({ key: 'delete', label: '删除节点', danger: true, action: () => removeNode(node.uid) })
   }
+  menu.open(menuItems, x, y, { title: node.text, fromTouch })
   cancelPan()
-  window.addEventListener('scroll', closeNodeMenu, { capture: true, once: true })
-}
-
-function closeNodeMenu() {
-  ctxMenu.value = null
-  pressFired = false
 }
 
 function onNodeCtx(node, e) {
@@ -382,7 +375,7 @@ function onPressStart(node, e) {
     try {
       navigator.vibrate?.(30)
     } catch (_) {}
-    openNodeMenu(node, touch.clientX, touch.clientY)
+    openNodeMenu(node, touch.clientX, touch.clientY, true)
   }, 550)
 }
 
@@ -391,30 +384,6 @@ function onPressEnd() {
     clearTimeout(pressTimer)
     pressTimer = null
   }
-}
-
-function ctxEdit() {
-  const uid = ctxMenu.value?.uid
-  closeNodeMenu()
-  if (uid) startEditNode(uid)
-}
-
-function ctxAddChild() {
-  const uid = ctxMenu.value?.uid
-  closeNodeMenu()
-  if (uid) addChild(uid)
-}
-
-function ctxAddSibling() {
-  const uid = ctxMenu.value?.uid
-  closeNodeMenu()
-  if (uid) addSibling(uid)
-}
-
-function ctxDelete() {
-  const uid = ctxMenu.value?.uid
-  closeNodeMenu()
-  if (uid) removeNode(uid)
 }
 
 function cancelPan() {
@@ -429,21 +398,16 @@ function cancelPan() {
 
 // ---- 导图卡片菜单：右键 / 长按 ----
 
-function openCardMenu(map, x, y) {
-  const w = 152
-  const h = 2 * 34 + 12
-  const pad = 8
-  cardMenu.value = {
-    map,
-    x: Math.max(pad, Math.min(x ?? 0, window.innerWidth - w - pad)),
-    y: Math.max(pad, Math.min(y ?? 0, window.innerHeight - h - pad)),
-  }
-  window.addEventListener('scroll', closeCardMenu, { capture: true, once: true })
-}
-
-function closeCardMenu() {
-  cardMenu.value = null
-  cardPressFired = false
+function openCardMenu(map, x, y, fromTouch = false) {
+  menu.open(
+    [
+      { key: 'open', label: '打开', action: () => openMap(map) },
+      { key: 'delete', label: '删除', danger: true, action: () => askDeleteMap(map) },
+    ],
+    x,
+    y,
+    { width: 152, title: map.title, fromTouch },
+  )
 }
 
 function onCardCtx(map, e) {
@@ -461,7 +425,7 @@ function onCardPressStart(map, e) {
     try {
       navigator.vibrate?.(30)
     } catch (_) {}
-    openCardMenu(map, touch.clientX, touch.clientY)
+    openCardMenu(map, touch.clientX, touch.clientY, true)
   }, 550)
 }
 
@@ -477,19 +441,11 @@ function onCardClick(map) {
     cardPressFired = false
     return
   }
-  if (cardMenu.value) return
+  if (menu.state.visible) return
   openMap(map)
 }
 
-function cardCtxOpen() {
-  const map = cardMenu.value?.map
-  closeCardMenu()
-  if (map) openMap(map)
-}
-
-function cardCtxDelete() {
-  const map = cardMenu.value?.map
-  closeCardMenu()
+function askDeleteMap(map) {
   if (!map) return
   pendingDelete.value = map
   confirmOpen.value = true
@@ -621,7 +577,7 @@ function onNodeClick(node) {
   }
   if (didPan) return
   if (editingUid.value != null) return
-  if (ctxMenu.value) return
+  if (menu.state.visible) return
   selectedUid.value = selectedUid.value === node.uid ? null : node.uid
 }
 
@@ -708,14 +664,7 @@ function edgeWidth(edge) {
 // ---- 快捷键（选中节点后：Tab 加子节点 / Enter 编辑 / Delete 删除） ----
 
 function onGlobalKeydown(e) {
-  if (e.key === 'Escape' && ctxMenu.value) {
-    closeNodeMenu()
-    return
-  }
-  if (e.key === 'Escape' && cardMenu.value) {
-    closeCardMenu()
-    return
-  }
+  if (menu.state.visible) return
   if (mode.value !== 'graph' || editingUid.value != null || selectedId.value == null) return
   const tag = document.activeElement?.tagName
   if (['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)) return
@@ -750,6 +699,10 @@ watch(canvasEl, (el) => {
 })
 
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'new', label: '新建导图', action: startNew },
+    { key: 'refresh', label: '刷新', action: load },
+  ], '思维导图')
   load()
   window.addEventListener('keydown', onGlobalKeydown)
 })
@@ -908,7 +861,6 @@ onBeforeUnmount(() => {
         :style="canvasStyle"
         @pointerdown="onPointerDown"
         @wheel.prevent="onWheel"
-        @contextmenu.prevent
       >
         <!-- 变换层：平移 + 缩放 -->
         <div class="absolute top-0 left-0" :style="transformStyle">
@@ -1049,53 +1001,7 @@ onBeforeUnmount(() => {
       </div>
     </template>
 
-    <!-- 节点操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
-    <Teleport to="body">
-      <div v-if="ctxMenu" class="fixed inset-0 z-40" @click="closeNodeMenu" @contextmenu.prevent="closeNodeMenu" />
-      <div
-        v-if="ctxMenu"
-        class="fixed z-50 w-44 rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-        :style="{ left: ctxMenu.x + 'px', top: ctxMenu.y + 'px' }"
-      >
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxEdit">
-          编辑文字
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="ctxAddChild">
-          添加子节点
-        </button>
-        <button
-          v-if="ctxMenu.depth > 0"
-          class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition"
-          @click="ctxAddSibling"
-        >
-          添加兄弟节点
-        </button>
-        <button
-          v-if="ctxMenu.depth > 0"
-          class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition"
-          @click="ctxDelete"
-        >
-          删除节点
-        </button>
-      </div>
-    </Teleport>
-
-    <!-- 导图卡片操作菜单：右键 / 长按调起；Teleport 到 body 避免祖先 transform 影响 fixed 定位 -->
-    <Teleport to="body">
-      <div v-if="cardMenu" class="fixed inset-0 z-40" @click="closeCardMenu" @contextmenu.prevent="closeCardMenu" />
-      <div
-        v-if="cardMenu"
-        class="fixed z-50 w-[152px] rounded-xl bg-slate-900 border border-white/15 shadow-xl shadow-black/50 p-1 text-xs"
-        :style="{ left: cardMenu.x + 'px', top: cardMenu.y + 'px' }"
-      >
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-slate-200 hover:bg-white/10 transition" @click="cardCtxOpen">
-          打开
-        </button>
-        <button class="w-full text-left px-2.5 py-1.5 rounded-lg text-rose-400 hover:bg-rose-500/10 transition" @click="cardCtxDelete">
-          删除
-        </button>
-      </div>
-    </Teleport>
+    <!-- 节点 / 卡片操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
 
     <ConfirmDialog
       v-model="confirmOpen"
