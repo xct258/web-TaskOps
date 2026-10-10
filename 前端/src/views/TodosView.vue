@@ -97,7 +97,7 @@ function matchesFilter(todo, key) {
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase()
   return items.value
-    .filter((t) => filter.value === 'all' || reachedReminder(t))
+    .filter((t) => reachedReminder(t))
     .filter((t) => matchesFilter(t, filter.value))
     .filter((t) => !q || [t.title, t.content].filter(Boolean).some((f) => String(f).toLowerCase().includes(q)))
     .sort((a, b) => {
