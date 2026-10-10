@@ -211,6 +211,7 @@ async function complete(todo) {
   try {
     replace(await api.todos.markProcessed(todo.id))
     toast.success(todo.recurring ? '已打卡，顺延至下一周期' : '已完成')
+    loadSummary()
   } catch (err) {
     toast.error(`操作失败：${err.message}`)
   }
@@ -220,6 +221,7 @@ async function undo(todo) {
   try {
     replace(await api.todos.undo(todo.id))
     toast.info('已撤销上一次完成')
+    loadSummary()
   } catch (err) {
     toast.error(`撤销失败：${err.message}`)
   }
@@ -229,6 +231,7 @@ async function reopen(todo) {
   try {
     replace(await api.todos.update(todo.id, { processed: false }))
     toast.info('已重新打开')
+    loadSummary()
   } catch (err) {
     toast.error(`操作失败：${err.message}`)
   }
@@ -238,6 +241,7 @@ async function snooze(todo) {
   try {
     replace(await api.todos.snooze(todo.id))
     toast.info('已推迟一个周期')
+    loadSummary()
   } catch (err) {
     toast.error(`推迟失败：${err.message}`)
   }
