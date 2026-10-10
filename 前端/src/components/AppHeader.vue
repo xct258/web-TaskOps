@@ -1,5 +1,5 @@
 <script setup>
-import { onMounted } from 'vue'
+import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import Icon from '@/components/Icon.vue'
@@ -13,6 +13,22 @@ const router = useRouter()
 const route = useRoute()
 const { icon, temp, desc, city } = useWeather()
 
+// 导航菜单按钮：所有模块收进下拉面板，省顶栏空间。
+const menuOpen = ref(false)
+const menuWrap = ref(null)
+function toggleMenu() {
+  menuOpen.value = !menuOpen.value
+}
+function closeMenu() {
+  menuOpen.value = false
+}
+function onMenuOutside(e) {
+  if (menuOpen.value && menuWrap.value && !menuWrap.value.contains(e.target)) closeMenu()
+}
+function onMenuKey(e) {
+  if (e.key === 'Escape') closeMenu()
+}
+
 // 导航高亮：完整类名字面量，确保 Tailwind JIT 能扫描到（原 AppNav 并入顶栏）。
 const ACTIVE = {
   indigo: 'bg-indigo-600 text-white border-indigo-400/40 shadow-lg shadow-indigo-500/30',
@@ -23,7 +39,15 @@ const ACTIVE = {
   rose: 'bg-rose-600 text-white border-rose-400/40 shadow-lg shadow-rose-500/30',
 }
 
-onMounted(loadSummary)
+onMounted(() => {
+  loadSummary()
+  document.addEventListener('click', onMenuOutside)
+  document.addEventListener('keydown', onMenuKey)
+})
+onUnmounted(() => {
+  document.removeEventListener('click', onMenuOutside)
+  document.removeEventListener('keydown', onMenuKey)
+})
 
 function go(path) {
   router.push(path)
@@ -32,8 +56,39 @@ function go(path) {
 
 <template>
   <header class="flex-shrink-0 flex items-center justify-between gap-3 pb-2.5 border-b border-white/10">
-    <!-- Logo + 汇总状态胶囊 -->
-    <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
+    <!-- 菜单按钮 + Logo：所有模块导航收进下拉面板 -->
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <div ref="menuWrap" class="relative">
+        <button
+          class="p-1.5 rounded-xl bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition"
+          title="导航菜单"
+          @click="toggleMenu"
+        >
+          <Icon name="list" :size="15" />
+        </button>
+        <div
+          v-if="menuOpen"
+          class="absolute left-0 top-full mt-2 z-50 w-44 rounded-xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl p-1.5 space-y-0.5"
+        >
+          <router-link
+            v-for="item in NAV_ITEMS"
+            :key="item.name"
+            :to="item.path"
+            class="flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-mono whitespace-nowrap border transition-all"
+            :class="
+              route.name === item.name
+                ? `${ACTIVE[item.accent]} font-bold border`
+                : 'bg-transparent hover:bg-white/10 text-slate-400 hover:text-slate-200 border-transparent'
+            "
+            @click="closeMenu"
+          >
+            <Icon :name="item.icon" :size="13" />
+            <span>{{ item.title }}</span>
+          </router-link>
+        </div>
+      </div>
+      <!-- Logo + 汇总状态胶囊 -->
+      <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden">
       <!-- 极简排印 Logo：宽字距等宽大写 + 末尾小色块，无装饰图形 -->
       <button
         class="flex items-center gap-1.5 transition-opacity hover:opacity-70"
@@ -87,24 +142,7 @@ function go(path) {
         </button>
       </div>
     </div>
-
-    <!-- 主导航：原 AppNav 整条并入顶栏中间，可横向滚动，省一行高度 -->
-    <nav class="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-mono">
-      <router-link
-        v-for="item in NAV_ITEMS"
-        :key="item.name"
-        :to="item.path"
-        class="flex items-center gap-1.5 px-3 py-1.5 rounded-xl whitespace-nowrap border transition-all"
-        :class="
-          route.name === item.name
-            ? `${ACTIVE[item.accent]} font-bold`
-            : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-        "
-      >
-        <Icon :name="item.icon" :size="13" />
-        <span>{{ item.title }}</span>
-      </router-link>
-    </nav>
+    </div>
 
     <!-- 天气 -->
     <div class="flex items-center gap-2 sm:gap-3.5 font-mono flex-shrink-0">
