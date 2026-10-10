@@ -76,7 +76,7 @@ const stats = computed(() => {
 })
 
 function reachedReminder(t) {
-  if (!t.need_remind || !t.due_time) return true
+  if (!t.need_remind || !t.due_time) return false
   const due = String(t.due_time)
   const advance = t.advance_days ?? 3
   const remind = new Date(new Date(due).getTime() - advance * 86400000)
