@@ -58,26 +58,35 @@ const filtered = computed(() => {
   }).sort((a, b) => (b.visit_count || 0) - (a.visit_count || 0))
 })
 
-// 渲染模型：全部 + 无搜索时按首个标签分组，否则平铺；index 用于快捷键提示。
+// 渲模型：全部 + 无搜索时按首个标签分组（组头独占一行），否则平铺。
+// 所有条目渲染在同一个网格中，避免单个标签空缺整行浪费空间。
 const renderModel = computed(() => {
   const grouped = activeTag.value === 'ALL' && !search.value.trim()
   if (grouped) {
     const map = new Map()
-    filtered.value.forEach((b) => {
+    filtered.value.forEach((b, i) => {
       const key = (b.tags || [])[0] || ''
       if (!map.has(key)) map.set(key, [])
       map.get(key).push(b)
     })
     let counter = 0
-    const groups = [...map.entries()].map(([tag, list]) => ({
-      tag: tag || '未分类',
-      items: list.map((b) => ({ b, index: (counter += 1) })),
-    }))
-    return { grouped: true, groups, order: groups.flatMap((g) => g.items.map((it) => it.b)) }
+    const sequence = []
+    const order = []
+    for (const [tag, list] of map.entries()) {
+      sequence.push({ type: 'header', tag: tag || '未分类', count: list.length })
+      for (const b of list) {
+        counter++
+        order.push(b)
+        sequence.push({ type: 'tile', b, index: counter })
+      }
+    }
+    return { grouped: true, sequence, order }
   }
-  const list = filtered.value.map((b, index) => ({ b, index: index + 1 }))
-  return { grouped: false, list, order: filtered.value }
+  let counter = 0
+  const sequence = filtered.value.map((b) => ({ type: 'tile', b, index: (counter += 1) }))
+  return { grouped: false, sequence, order: filtered.value }
 })
+
 
 async function load() {
   loading.value = true
@@ -362,33 +371,26 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         description="试试更换筛选条件，或按 Esc 清空搜索。"
       />
 
-      <div v-else-if="renderModel.grouped" class="space-y-3">
-        <div v-for="group in renderModel.groups" :key="group.tag" class="space-y-1.5">
-          <div class="flex items-center gap-1.5 text-xs font-mono font-medium text-slate-400">
+      <div
+        v-else
+        class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5"
+      >
+        <template v-for="entry in renderModel.sequence" :key="entry.type === 'header' ? `h-${entry.tag}` : entry.b.id">
+          <div
+            v-if="entry.type === 'header'"
+            class="col-span-full flex items-center gap-1.5 text-xs font-mono font-medium text-slate-400"
+          >
             <span class="w-1.5 h-1.5 rounded-full bg-indigo-400" />
-            <span>{{ group.tag }}</span>
-            <span class="text-[10px] text-slate-600">({{ group.items.length }})</span>
+            <span>{{ entry.tag }}</span>
+            <span class="text-[10px] text-slate-600">({{ entry.count }})</span>
           </div>
-          <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5">
-            <BookmarkTile
-              v-for="entry in group.items"
-              :key="entry.b.id"
-              :bookmark="entry.b"
-              @open="onOpen"
-              @ctx="onCardCtx"
-            />
-          </div>
-        </div>
-      </div>
-
-      <div v-else class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-1.5">
-        <BookmarkTile
-          v-for="entry in renderModel.list"
-          :key="entry.b.id"
-          :bookmark="entry.b"
-          @open="onOpen"
-          @ctx="onCardCtx"
-        />
+          <BookmarkTile
+            v-else
+            :bookmark="entry.b"
+            @open="onOpen"
+            @ctx="onCardCtx"
+          />
+        </template>
       </div>
     </div>
 
