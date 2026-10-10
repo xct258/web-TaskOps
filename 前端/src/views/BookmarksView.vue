@@ -243,7 +243,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
           :class="
             activeTag === 'ALL'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
+              ? 'bg-indigo-600 text-white border-indigo-400/40'
               : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
           "
           @click="setTag('ALL')"
@@ -256,7 +256,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
           :class="
             activeTag === tag
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
+              ? 'bg-indigo-600 text-white border-indigo-400/40'
               : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
           "
           @click="setTag(tag)"
@@ -268,7 +268,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
           class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
           :class="
             activeTag === '__untagged__'
-              ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30 font-bold border-indigo-400/40'
+              ? 'bg-indigo-600 text-white border-indigo-400/40'
               : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
           "
           @click="setTag('__untagged__')"
