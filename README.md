@@ -34,49 +34,30 @@
 ├── models.py          # 数据表模型（Todo/Bookmark/ServerStatus/Ledger/Asset/Liability/Note/MindMap）
 ├── utils.py           # 日期、循环周期、账本资金影响等纯函数
 └── routers/           # 各业务路由：todos / bookmarks / server / ledger / notes / mindmaps
- 容器构建脚本/
- ├── init-components.sh # 镜像构建期：装运行时依赖 + 从 build-latest Release 下载构建产物并解压（不在容器内构建）
- └── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
- Dockerfile             # 基于 xct258/debian-cn 构建镜像（构建时从 main 拉取构建脚本执行）
- docker-compose.yml     # 运行容器（host 网络 + 数据卷 ./app:/app）
- .github/workflows/
- ├── build-artifacts.yml # push main 后构建前端、打包前后端产物并发布到 build-latest Release
- └── docker-image.yml    # 产物更新/定时/手动构建并推送镜像
+容器构建脚本/
+├── init-components.sh # 镜像构建期：装依赖（含 Node）+ 前端构建 + 拉取后端文件 + 安装 7zz
+└── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
+Dockerfile             # 基于 xct258/debian-cn 构建镜像
+docker-compose.yml     # 运行容器（host 网络 + 数据卷 ./app:/app）
 ```
 
 ---
 
 ## 三、快速开始
 
-### 1. 推送源码（自动构建产物）
-
-```bash
-git push origin main
-```
-
-`build-artifacts` 工作流在 `前端/` 或 `后端/` 变化时自动运行：在 CI 里
-`npm ci && npm run build`，把 `前端/dist` 打成 `frontend-dist.tar.gz`、
-后端打成 `backend.tar.gz`（附 `sha256sums.txt`），发布到滚动 Release
-`build-latest`（tag 名固定，文件每次覆盖更新）。
-
-### 2. 构建镜像（只下载 + 复制产物，不在容器内构建）
+### 1. 构建镜像
 
 ```bash
 docker build -t xct258/taskops .
 ```
 
-`Dockerfile` 会从 GitHub main 拉取 `容器构建脚本/init-components.sh` 并执行；
-`init-components.sh` 只做下载 + 解压：从 `build-latest` Release 拉取
-`frontend-dist.tar.gz` / `backend.tar.gz` 并校验 sha256 后解到 `/opt/taskops`，
-外加安装 `python3 / pip(uvicorn fastapi sqlmodel) / 7zz` 等运行时依赖。
-外加安装 `python3 / pip(uvicorn fastapi sqlmodel) / 7zz` 等运行时依赖。
-容器内不再安装 Node、不再执行 `npm install / npm run build`。
+`Dockerfile` 会从 GitHub main 拉取 `容器构建脚本/init-components.sh` 并执行：安装
+`python3 / pip(uvicorn fastapi sqlmodel) / Node.js / 7zz`，前端源码构建为 `dist`，
+连同后端一起下载到 `/opt/taskops`。
 
-> 若 Release 产物尚不存在（如仓库刚启用此流程），脚本会自动回退到容器内
-> npm 构建 / 逐文件下载，保证首次可用；正常情况下走 Release 主路径。
-> `docker-image` 工作流会在 `build-artifacts` 成功后自动跟进构建镜像（另有每月定时 + 手动触发）。
+> 构建依赖 GitHub main 上的文件已是最新；若刚改过代码，请先推送再构建。
 
-### 3. 启动
+### 2. 启动
 
 ```bash
 docker compose up -d
@@ -95,7 +76,7 @@ services:
     restart: always
 ```
 
-### 4. 访问
+### 3. 访问
 
 - 经反代：`https://taskops.你的域名.com`（推荐）
 - 直连后端自测：`http://<主机>:8481/api/todos`
