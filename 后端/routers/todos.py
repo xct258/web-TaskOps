@@ -12,6 +12,12 @@
   ``processed`` 保持 False；下一次保证**严格晚于今天**（daily 即明天，其余跳过已错过的周期）。
 - 完成前会把旧状态存到 ``undo_snapshot``，``POST /todos/{rid}/undo`` 可回滚上一次完成。
 
+MQTT 提醒（push-server 双向同步，逻辑在 push_sync.py）：
+- 新字段：``push_enabled``（独立开关）/``push_at``（排期展示）/``push_task_id``（回执）；
+  开提醒必须给 ``push_at``（否则 400）。
+- 内存改完→先同步→再 commit，同步失败 rollback + 502（两边一致，无孤儿任务）。
+- ``processed``/``snooze`` 接受可选 ``callback_ref``（回调幂等，重放跳过推进）。
+
 调试速查::
 
     $ curl localhost:8481/todos
@@ -24,8 +30,9 @@
     $ curl -X POST localhost:8481/todos/1/snooze
     $ curl -X DELETE localhost:8481/todos/1
 """
+import logging
 from datetime import date, datetime, timedelta
-from typing import List
+from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -33,12 +40,35 @@ from sqlmodel import Session, select
 
 from db import get_todo_session
 from models import Todo
+from push_sync import PushSyncError, cancel_push_task, parse_push_at, upsert_push_task
 from utils import calc_next_due, calc_next_due_after, parse_due_date
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
 # 免提醒标记：循环写 none（区别于一次性的空值）；日期直接置空
 NO_CYCLE = "none"
+
+
+def _sync_upsert_or_502(session: Session, r: Todo) -> None:
+    """投递提醒任务（内存改完→先同步→再 commit）；失败记日志 + rollback + 502，保证两边一致。"""
+    try:
+        r.push_task_id = upsert_push_task(r)
+    except PushSyncError as e:
+        logger.error(f"待办 #{r.id} 投递提醒失败：{e}")
+        session.rollback()
+        raise HTTPException(status_code=502, detail=str(e))
+
+
+def _sync_cancel_or_502(session: Session, todo_id: int) -> None:
+    """取消提醒任务；失败记日志 + rollback + 502（防幽灵推送）。"""
+    try:
+        cancel_push_task(todo_id)
+    except PushSyncError as e:
+        logger.error(f"待办 #{todo_id} 取消提醒失败：{e}")
+        session.rollback()
+        raise HTTPException(status_code=502, detail=str(e))
 
 
 def _normalize_cycle(data) -> None:
@@ -106,7 +136,24 @@ def create_todo(data: Todo, session: Session = Depends(get_todo_session)):
             data.remind_time = data.due_time - timedelta(days=adv)
         _normalize_cycle(data)
 
+    # MQTT 提醒：开关独立于 need_remind；开提醒必须给时间；先入库拿 id 再投递
+    data.push_enabled = bool(data.push_enabled)
+    data.push_task_id = None
+    data.last_callback_ref = None
+    if data.push_enabled:
+        if not data.push_at:
+            raise HTTPException(400, "push_at is required when push_enabled")
+        try:
+            data.push_at = parse_push_at(data.push_at)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid push_at format")
+    else:
+        data.push_at = None
+
     session.add(data)
+    session.flush()  # 拿 id 投递（未 commit，失败可回滚，不留孤儿任务）
+    if data.push_enabled:
+        _sync_upsert_or_502(session, data)
     session.commit()
     session.refresh(data)
     return data
@@ -175,6 +222,27 @@ def update_todo(
         elif r.recurring and not r.cycle_mode:
             r.cycle_mode = "daily"
 
+    # MQTT 提醒同步（内存改完→先同步→再 commit，失败回滚+502；每次编辑都重投递保鲜）
+    if "push_enabled" in payload:
+        r.push_enabled = bool(payload["push_enabled"])
+    if "push_at" in payload:
+        if payload["push_at"]:
+            try:
+                r.push_at = parse_push_at(payload["push_at"])
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid push_at format")
+        else:
+            r.push_at = None
+    if r.push_enabled and not r.push_at:
+        raise HTTPException(400, "push_at is required when push_enabled")
+    if r.push_enabled and not (r.processed and not r.recurring):
+        _sync_upsert_or_502(session, r)
+    else:
+        if r.push_task_id:
+            _sync_cancel_or_502(session, r.id)
+            r.push_task_id = None
+        r.push_at = None
+
     session.commit()
     session.refresh(r)
     return r
@@ -193,31 +261,58 @@ def _snapshot(r: Todo) -> dict:
 @router.put("/todos/{rid}/processed")
 def mark_processed(
     rid: int = Path(...),
+    body: Optional[dict] = None,
     session: Session = Depends(get_todo_session),
 ):
+    """完成打卡；body 可带 callback_ref（push-server 回调幂等：重放只跳过推进，不跳过同步）。
+
+    循环+开推送：push_at 按 due 偏移同步平移并 upsert 建下一期（先同步后 commit）；
+    一次性+开推送：cancel 对端任务（best-effort，失败只记日志，不拦完成）。
+    """
     r = session.get(Todo, rid)
     if not r:
         raise HTTPException(404, "Todo not found")
 
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    callback_ref = (body or {}).get("callback_ref")
+    replay = bool(callback_ref and r.last_callback_ref == callback_ref)
 
-    r.undo_snapshot = _snapshot(r)  # 供 /undo 回滚
-    r.last_completed_date = today
+    if not replay:
+        r.undo_snapshot = _snapshot(r)  # 供 /undo 回滚
+        r.last_completed_date = today
+        if callback_ref:
+            r.last_callback_ref = callback_ref
 
-    if r.recurring:
-        base_due = r.due_time or today
-        if r.catch_up:
-            # 逐期补做：按旧 due 只顺延一个周期（可能仍在过去，需继续完成）
-            next_due = calc_next_due(r, base_due)
+        if r.recurring:
+            base_due = r.due_time or today
+            old_due = r.due_time
+            if r.catch_up:
+                # 逐期补做：按旧 due 只顺延一个周期（可能仍在过去，需继续完成）
+                next_due = calc_next_due(r, base_due)
+            else:
+                # 跳过已错过的周期：下一次严格晚于今天（daily 即明天）
+                next_due = calc_next_due_after(r, base_due, today)
+            # 循环顺延：推送时间按到期日偏移同步平移
+            if r.push_enabled and r.push_at and old_due and next_due:
+                try:
+                    r.push_at = parse_push_at(r.push_at) + (next_due - old_due)
+                except ValueError:
+                    r.push_at = None
+            r.due_time = next_due
+            adv = r.advance_days or 0
+            r.remind_time = next_due - timedelta(days=adv)
+            r.processed = False
         else:
-            # 跳过已错过的周期：下一次严格晚于今天（daily 即明天）
-            next_due = calc_next_due_after(r, base_due, today)
-        r.due_time = next_due
-        adv = r.advance_days or 0
-        r.remind_time = next_due - timedelta(days=adv)
-        r.processed = False
-    else:
-        r.processed = True
+            r.processed = True
+
+    # 推送同步：循环建下一期（失败回滚+502）；一次性取消对端（best-effort）
+    if r.push_enabled and r.push_at and not (r.processed and not r.recurring):
+        _sync_upsert_or_502(session, r)
+    elif not r.recurring and (r.push_task_id or r.push_enabled):
+        try:
+            cancel_push_task(r.id)
+        except PushSyncError as e:
+            logger.error(f"待办 #{r.id} 完成但取消提醒失败（稍后幽灵推送将打空回调）：{e}")
 
     session.commit()
     session.refresh(r)
@@ -254,23 +349,56 @@ def undo_processed(
 @router.post("/todos/{rid}/snooze")
 def snooze_todo(
     rid: int = Path(...),
+    body: Optional[dict] = None,
     session: Session = Depends(get_todo_session),
 ):
-    """行内推迟：循环任务顺延一个周期，一次性任务 +1 天（从 due/今天中较晚者起算）。"""
+    """行内推迟：循环任务顺延一个周期，一次性任务 +1 天（从 due/今天中较晚者起算）。
+
+    body 可带 callback_ref（幂等）与 push_at（回调回写的新排期，直接采用，不 upsert）；
+    手动推迟+开推送：push_at 按 due 偏移平移并 upsert（先同步后 commit）。
+    """
     r = session.get(Todo, rid)
     if not r:
         raise HTTPException(404, "Todo not found")
     if not r.need_remind:
         raise HTTPException(400, "only reminder todos can snooze")
 
-    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-    base = r.due_time or today
-    anchor = base if base > today else today
-    next_due = calc_next_due(r, anchor) if r.recurring else anchor + timedelta(days=1)
+    body = body or {}
+    callback_ref = body.get("callback_ref")
+    replay = bool(callback_ref and r.last_callback_ref == callback_ref)
 
-    r.due_time = next_due
-    adv = r.advance_days or 0
-    r.remind_time = next_due - timedelta(days=adv)
+    today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
+    if not replay:
+        if callback_ref:
+            r.last_callback_ref = callback_ref
+        base = r.due_time or today
+        old_due = r.due_time
+        anchor = base if base > today else today
+        next_due = calc_next_due(r, anchor) if r.recurring else anchor + timedelta(days=1)
+
+        if r.push_enabled:
+            if body.get("push_at"):
+                # 回调回写：采用对端新排期（note 仅日志，不存列）
+                try:
+                    r.push_at = parse_push_at(body["push_at"])
+                except ValueError:
+                    raise HTTPException(status_code=400, detail="Invalid push_at format")
+                if body.get("note"):
+                    logger.info(f"待办 #{r.id} 推迟备注：{body['note']}")
+            elif r.push_at and old_due and next_due:
+                # 手动推迟：推送时间按到期日偏移同步平移
+                try:
+                    r.push_at = parse_push_at(r.push_at) + (next_due - old_due)
+                except ValueError:
+                    r.push_at = None
+        r.due_time = next_due
+        adv = r.advance_days or 0
+        r.remind_time = next_due - timedelta(days=adv)
+
+    # 手动推迟才 upsert（回调方排期已是最新，不用回写）
+    if r.push_enabled and r.push_at and not body.get("push_at"):
+        _sync_upsert_or_502(session, r)
+
     session.commit()
     session.refresh(r)
     return r
@@ -284,6 +412,9 @@ def delete_todo(
     r = session.get(Todo, rid)
     if not r:
         raise HTTPException(404, "Todo not found")
+    # 先取消对端任务（失败 502，不删行，防幽灵推送）
+    if r.push_task_id or r.push_enabled:
+        _sync_cancel_or_502(session, r.id)
     session.delete(r)
     session.commit()
     return {"message": "Deleted"}

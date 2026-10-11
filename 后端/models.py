@@ -36,6 +36,14 @@ class Todo(SQLModel, table=True):
     remind_time: Optional[date] = Field(default=None)
     advance_days: Optional[int] = Field(default=3)  # 提醒提前天数：未显式给提醒日时默认提前 3 天
 
+    # MQTT 提醒（push-server 双向同步）：开关独立于 need_remind；push_at 为展示/同步用
+    # 的排期（真相在 push-server 的 tasks.json）；push_task_id 为回执；last_callback_ref
+    # 防回调重试重复推进（processed/snooze 见 routers）。
+    push_enabled: bool = Field(default=False)
+    push_at: Optional[datetime] = Field(default=None)
+    push_task_id: Optional[int] = Field(default=None)
+    last_callback_ref: Optional[str] = Field(default=None)
+
     priority: int = Field(default=0)  # 优先级：0 无 / 1 低 / 2 中 / 3 高
     catch_up: bool = Field(default=False)  # 循环逾期后：False 跳过到未来，True 逐期补做
 

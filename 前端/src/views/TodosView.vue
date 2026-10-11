@@ -45,6 +45,8 @@ const form = reactive({
   cycle_mode: '',
   cycle_days: 7,
   catch_up: false,
+  push_enabled: false,
+  push_at: '',
 })
 
 const confirmOpen = ref(false)
@@ -188,6 +190,20 @@ function replace(updated) {
   loadSummary()
 }
 
+/** 后端 ISO 时间 → datetime-local 输入值（YYYY-MM-DDTHH:MM，兼容 +08:00 后缀）。 */
+function toLocalInput(v) {
+  if (!v) return ''
+  return String(v).replace(' ', 'T').slice(0, 16)
+}
+
+/** 推送时间展示：MM-DD HH:MM。 */
+function formatPush(v) {
+  const s = toLocalInput(v)
+  if (!s) return ''
+  const [d, t] = s.split('T')
+  return `${d.slice(5)} ${t}`
+}
+
 function openAdd() {
   editing.value = null
   Object.assign(form, {
@@ -200,6 +216,8 @@ function openAdd() {
     cycle_mode: '',
     cycle_days: 7,
     catch_up: false,
+    push_enabled: false,
+    push_at: '',
   })
   modalOpen.value = true
 }
@@ -216,6 +234,8 @@ function openEdit(todo) {
     cycle_mode: todo.recurring ? todo.cycle_mode || '' : '',
     cycle_days: todo.cycle_days || 7,
     catch_up: !!todo.catch_up,
+    push_enabled: !!todo.push_enabled,
+    push_at: toLocalInput(todo.push_at),
   })
   modalOpen.value = true
 }
@@ -231,12 +251,22 @@ async function save() {
     need_remind: form.need_remind,
     priority: Number(form.priority) || 0,
     catch_up: form.catch_up,
+    push_enabled: form.push_enabled,
   }
   if (form.need_remind) {
     payload.due_time = form.due_time || todayISO()
     payload.advance_days = Number(form.advance_days) || 0
     payload.cycle_mode = form.cycle_mode || 'none'
     if (form.cycle_mode === 'days') payload.cycle_days = Number(form.cycle_days) || 1
+  }
+  if (form.push_enabled) {
+    if (!form.push_at) {
+      toast.error('请先选择 MQTT 推送时间')
+      return
+    }
+    payload.push_at = form.push_at
+  } else {
+    payload.push_at = null
   }
 
   saving.value = true
@@ -465,6 +495,10 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
                 提醒 {{ formatDate(todo.remind_time) }}
               </span>
               <span v-if="!todo.need_remind" class="text-slate-600">免提醒</span>
+              <span v-if="todo.push_enabled && todo.push_at" class="flex items-center gap-1 text-sky-400/90">
+                <Icon name="share" :size="10" />
+                MQTT {{ formatPush(todo.push_at) }}
+              </span>
               <span v-if="todo.last_completed_date" class="text-emerald-500/80">
                 上次 {{ formatDate(todo.last_completed_date) }}
               </span>
@@ -582,6 +616,28 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
             </button>
           </div>
         </template>
+
+        <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
+          <div>
+            <div class="text-slate-200">MQTT 消息提醒</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">到点后经 push-server 推送到 MQTT，与到期提醒相互独立</div>
+          </div>
+          <button
+            class="relative w-9 h-5 rounded-full transition flex-shrink-0"
+            :class="form.push_enabled ? 'bg-sky-500' : 'bg-slate-700'"
+            @click="form.push_enabled = !form.push_enabled"
+          >
+            <span
+              class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+              :class="form.push_enabled ? 'translate-x-4' : ''"
+            />
+          </button>
+        </div>
+
+        <div v-if="form.push_enabled">
+          <label :class="labelClass">推送时间</label>
+          <input v-model="form.push_at" type="datetime-local" :class="inputClass" />
+        </div>
       </div>
 
       <template #footer>
