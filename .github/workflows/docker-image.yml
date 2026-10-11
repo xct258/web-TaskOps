@@ -4,6 +4,11 @@ on:
   # 定时触发：每月1日的 00:00 UTC 自动运行一次（可用于自动构建/发布）
   schedule:
     - cron: '0 0 1 * *'
+  # 构建产物更新后自动跟进构建镜像（build-artifacts 发布 build-latest Release 后触发）
+  workflow_run:
+    workflows: ['build-artifacts']
+    types: [completed]
+    branches: [main]
   workflow_dispatch:
 
 env:
@@ -12,6 +17,8 @@ env:
 
 jobs:
   build:
+    # workflow_run 触发时，仅当 build-artifacts 成功才构建（保证 Release 产物已就绪）
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest  # 指定在 GitHub 提供的 Ubuntu 最新 runner 上执行
 
     permissions:

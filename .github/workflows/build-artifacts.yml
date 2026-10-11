@@ -1,0 +1,76 @@
+name: build-artifacts  # 推送源码时构建产物并发布到 build-latest Release，容器构建只下载产物
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - '前端/**'
+      - '后端/**'
+      - '.github/workflows/build-artifacts.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: write  # 需要创建/覆盖 build-latest Release
+
+env:
+  ARTIFACT_TAG: build-latest
+
+jobs:
+  build-and-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: npm
+          cache-dependency-path: 前端/package-lock.json
+
+      - name: Build frontend
+        working-directory: 前端
+        run: |
+          npm ci --no-audit --no-fund
+          npm run build
+          ls -la dist/
+
+      - name: Package artifacts
+        run: |
+          # 前端构建产物（dist 内容打平，容器内直接解到 /opt/taskops/前端）
+          tar -czf frontend-dist.tar.gz -C 前端/dist .
+          # 后端源码包（保持 后端/ 顶层目录结构，容器内解到 /opt/taskops；注意 --exclude 必须写在目录参数之前）
+          tar -czf backend.tar.gz --exclude='后端/data' --exclude='后端/__pycache__' 后端
+          sha256sum frontend-dist.tar.gz backend.tar.gz > sha256sums.txt
+          cat sha256sums.txt
+          tar -tzf frontend-dist.tar.gz | head -5
+          tar -tzf backend.tar.gz | head -10
+
+      - name: Upload actions artifact (debug)
+        uses: actions/upload-artifact@v4
+        with:
+          name: taskops-build-${{ github.sha }}
+          path: |
+            frontend-dist.tar.gz
+            backend.tar.gz
+            sha256sums.txt
+          retention-days: 7
+
+      - name: Publish to rolling release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ env.ARTIFACT_TAG }}
+          name: TaskOps 构建产物（滚动更新）
+          body: |
+            由 build-artifacts 工作流在每次推送 main 后自动更新。
+            - `frontend-dist.tar.gz`：前端 Vite 构建产物（dist 内容），容器构建时下载解压到 `/opt/taskops/前端`，不再在容器内执行 npm 构建。
+            - `backend.tar.gz`：后端源码包，容器构建时下载解压。
+            - 提交：${{ github.sha }}
+          draft: false
+          prerelease: false
+          fail_on_unmatched_files: false
+          files: |
+            frontend-dist.tar.gz
+            backend.tar.gz
+            sha256sums.txt
