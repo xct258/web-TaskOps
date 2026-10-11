@@ -19,6 +19,7 @@ const pageMenu = usePageMenu()
 const notes = ref([])
 const loading = ref(true)
 const search = ref('')
+const searchOpen = ref(false)
 const activeTag = ref('ALL')
 const searchEl = ref(null)
 
@@ -33,9 +34,6 @@ const pendingDelete = ref(null)
 // 笔记操作菜单：右键 / 长按调起全局菜单。
 let pressTimer = null
 let pressFired = false
-
-const inputClass =
-  'w-full px-3 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-violet-400 transition'
 
 const allTags = computed(() => {
   const set = new Set()
@@ -54,6 +52,7 @@ const visible = computed(() => {
 })
 
 const renderedHtml = computed(() => renderMarkdown(draft.content))
+const draftTagList = computed(() => parseTags(draft.tags))
 
 function excerpt(content) {
   return String(content || '')
@@ -200,8 +199,19 @@ function askDeleteFromDetail() {
 
 const activeNote = computed(() => notes.value.find((n) => n.id === selectedId.value) || null)
 
-function focusSearch() {
+function openSearch() {
+  searchOpen.value = true
   nextTick(() => searchEl.value?.focus())
+}
+
+function closeSearch() {
+  search.value = ''
+  searchOpen.value = false
+}
+
+function toggleSearch() {
+  if (searchOpen.value) closeSearch()
+  else openSearch()
 }
 
 function onSearchKeydown(e) {
@@ -211,7 +221,7 @@ function onSearchKeydown(e) {
   if (e.key === '/' || ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k')) {
     e.preventDefault()
     if (selectedId.value != null) return
-    focusSearch()
+    openSearch()
   }
 }
 
@@ -236,15 +246,21 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <span class="text-sm font-semibold text-slate-100">笔记</span>
           <span class="text-[10px] font-mono text-slate-500">{{ visible.length }}</span>
         </div>
-        <div class="relative">
-          <Icon name="search" :size="13" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+        <button
+          class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
+          title="搜索（/）"
+          @click="toggleSearch"
+        >
+          <Icon name="search" :size="13" />
+        </button>
+        <div v-if="searchOpen" class="relative min-w-[100px] max-w-[180px]">
           <input
             ref="searchEl"
             v-model="search"
             type="text"
-            placeholder="搜索（/）"
-            class="w-36 sm:w-52 pl-8 pr-2.5 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-violet-400 transition"
-            @keydown.esc="search = ''"
+            placeholder="搜索"
+            class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-violet-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
+            @keydown.esc="closeSearch"
           />
         </div>
         <button
@@ -309,9 +325,10 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       </div>
     </template>
 
-    <!-- ===== 全屏详情 ===== -->
+    <!-- ===== 全屏详情 / 新建 ===== -->
     <template v-else>
-      <div class="flex-shrink-0 flex items-center gap-2 mb-2">
+      <!-- 顶栏：返回 + 状态 + 操作 -->
+      <div class="flex-shrink-0 flex items-center gap-2 mb-2.5">
         <button
           class="p-1.5 rounded-xl bg-white/5 border border-white/10 text-slate-300 hover:bg-white/10 transition"
           title="返回列表"
@@ -319,26 +336,20 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         >
           <Icon name="chevronLeft" :size="15" />
         </button>
-        <input
-          v-model="draft.title"
-          :class="inputClass"
-          class="flex-1 !text-sm font-semibold"
-          placeholder="笔记标题"
-        />
+
+        <span class="text-[11px] font-mono text-slate-500 truncate">
+          {{ selectedId === 'new' ? '新建笔记' : '编辑笔记' }}
+        </span>
+
+        <div class="flex-1" />
+
         <button
           class="p-1.5 rounded-xl border transition"
           :class="preview ? 'bg-violet-600/80 text-white border-violet-400/30' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'"
           :title="preview ? '编辑' : '预览'"
           @click="preview = !preview"
         >
-          <Icon name="note" :size="15" />
-        </button>
-        <button
-          class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-violet-600/80 hover:bg-violet-600 disabled:opacity-60 text-white text-xs font-mono border border-violet-400/30 transition"
-          :disabled="saving"
-          @click="save"
-        >
-          <Icon name="check" :size="14" /> 保存
+          <Icon :name="preview ? 'edit' : 'note'" :size="15" />
         </button>
         <button
           v-if="selectedId !== 'new'"
@@ -348,30 +359,61 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         >
           <Icon name="trash" :size="15" />
         </button>
+        <button
+          class="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-violet-600/80 hover:bg-violet-600 disabled:opacity-60 text-white text-xs font-mono border border-violet-400/30 transition"
+          :disabled="saving"
+          @click="save"
+        >
+          <Icon name="check" :size="14" /> 保存
+        </button>
       </div>
 
-      <div class="flex-1 min-h-0 flex flex-col gap-2">
-        <div class="flex-shrink-0 flex items-center gap-2">
-          <span class="text-[10px] text-slate-500 font-mono shrink-0">标签</span>
-          <input v-model="draft.tags" :class="inputClass" placeholder="逗号分隔，如：运维, 部署" />
-        </div>
+      <!-- 文档卡片：标题 / 标签 / 正文一体 -->
+      <div class="flex-1 min-h-0 flex flex-col rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 overflow-hidden">
+        <input
+          v-model="draft.title"
+          class="w-full flex-shrink-0 bg-transparent px-4 sm:px-5 pt-4 pb-2 text-base sm:text-lg font-semibold text-white caret-violet-400 placeholder-slate-500 focus:outline-none selectable"
+          placeholder="笔记标题"
+        />
 
-        <div class="flex-1 min-h-0 rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 overflow-hidden flex flex-col">
-          <textarea
-            v-if="!preview"
-            v-model="draft.content"
-            class="flex-1 w-full resize-none bg-transparent p-3.5 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none selectable"
-            placeholder="支持 Markdown：# 标题、**粗体**、`代码`、- 列表、> 引用、``` 代码块 ```"
+        <div class="flex-shrink-0 flex items-center gap-2 px-4 sm:px-5 pb-3">
+          <Icon name="tag" :size="13" class="text-slate-500 shrink-0" />
+          <input
+            v-model="draft.tags"
+            class="flex-1 min-w-0 bg-transparent text-[11px] text-slate-300 caret-violet-400 placeholder-slate-600 focus:outline-none selectable"
+            placeholder="添加标签，用逗号分隔（如：运维, 部署）"
           />
-          <div v-else class="md-preview flex-1 overflow-y-auto custom-scroll p-3.5" v-html="renderedHtml" />
+          <div v-if="draftTagList.length" class="flex items-center gap-1 shrink-0 max-w-[55%] overflow-hidden">
+            <span
+              v-for="t in draftTagList.slice(0, 3)"
+              :key="t"
+              class="text-[9px] px-1.5 py-px rounded-md border whitespace-nowrap"
+              :class="tagColor(t)"
+            >
+              {{ t }}
+            </span>
+            <span v-if="draftTagList.length > 3" class="text-[9px] text-slate-500 font-mono shrink-0">+{{ draftTagList.length - 3 }}</span>
+          </div>
         </div>
 
-        <div class="flex-shrink-0 flex items-center justify-between gap-2">
-          <span class="text-[10px] text-slate-500 font-mono">
-            <template v-if="activeNote">最近编辑 {{ relativeTime(activeNote.updated_at) }} · 创建 {{ activeNote.created_at }}</template>
-            <template v-else>新笔记</template>
-          </span>
-        </div>
+        <div class="flex-shrink-0 h-px bg-white/10" />
+
+        <textarea
+          v-if="!preview"
+          v-model="draft.content"
+          class="flex-1 w-full resize-none bg-transparent px-4 sm:px-5 py-4 text-xs text-slate-200 caret-violet-400 font-mono leading-relaxed focus:outline-none selectable custom-scroll"
+          placeholder="支持 Markdown：# 标题、**粗体**、`代码`、- 列表、> 引用、``` 代码块 ```"
+        />
+        <div v-else class="md-preview flex-1 overflow-y-auto custom-scroll px-4 sm:px-5 py-4" v-html="renderedHtml" />
+      </div>
+
+      <!-- 底栏：时间 + 字数 -->
+      <div class="flex-shrink-0 flex items-center justify-between gap-2 mt-2 px-1">
+        <span class="text-[10px] text-slate-500 font-mono truncate">
+          <template v-if="activeNote">最近编辑 {{ relativeTime(activeNote.updated_at) }} · 创建 {{ activeNote.created_at }}</template>
+          <template v-else>新笔记</template>
+        </span>
+        <span class="text-[10px] text-slate-500 font-mono shrink-0">{{ draft.content.length }} 字</span>
       </div>
     </template>
 
