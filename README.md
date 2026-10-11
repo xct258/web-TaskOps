@@ -37,7 +37,7 @@
  容器构建脚本/
  ├── init-components.sh # 镜像构建期：装运行时依赖 + 从 build-latest Release 下载构建产物并解压（不在容器内构建）
  └── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
- Dockerfile             # 基于 xct258/debian-cn 构建镜像（构建脚本来自构建上下文 COPY，产物来自 Release 下载）
+ Dockerfile             # 基于 xct258/debian-cn 构建镜像（构建时从 main 拉取构建脚本执行）
  docker-compose.yml     # 运行容器（host 网络 + 数据卷 ./app:/app）
  .github/workflows/
  ├── build-artifacts.yml # push main 后构建前端、打包前后端产物并发布到 build-latest Release
@@ -65,9 +65,10 @@ git push origin main
 docker build -t xct258/taskops .
 ```
 
-`Dockerfile` 把 `容器构建脚本/` 从构建上下文 `COPY` 进镜像（版本与本次检出一致），
+`Dockerfile` 会从 GitHub main 拉取 `容器构建脚本/init-components.sh` 并执行；
 `init-components.sh` 只做下载 + 解压：从 `build-latest` Release 拉取
 `frontend-dist.tar.gz` / `backend.tar.gz` 并校验 sha256 后解到 `/opt/taskops`，
+外加安装 `python3 / pip(uvicorn fastapi sqlmodel) / 7zz` 等运行时依赖。
 外加安装 `python3 / pip(uvicorn fastapi sqlmodel) / 7zz` 等运行时依赖。
 容器内不再安装 Node、不再执行 `npm install / npm run build`。
 
