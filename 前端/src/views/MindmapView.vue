@@ -9,7 +9,7 @@ import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { usePageMenu } from '@/composables/usePageMenu'
-import { relativeTime } from '@/utils/format'
+import { parseTags, relativeTime, tagColor } from '@/utils/format'
 import {
   branchColor,
   buildMindmap,
@@ -29,11 +29,15 @@ const pageMenu = usePageMenu()
 const items = ref([])
 const loading = ref(true)
 const search = ref('')
+const searchOpen = ref(false)
+const searchEl = ref(null)
+const activeTag = ref('ALL')
 const selectedId = ref(null) // number | 'new' | null
 const mode = ref('graph') // graph | edit
 const layoutMode = ref('tree') // tree | radial
 const saving = ref(false)
 const confirmOpen = ref(false)
+const tagInput = ref('')
 
 // 画布视图：缩放 + 平移，transform 为 translate(tx,ty) scale(scale)。
 const scale = ref(1)
@@ -61,10 +65,8 @@ const editingUid = ref(null)
 const editingText = ref('')
 const editInputEl = ref(null)
 
-const draft = reactive({ title: '', outline: '' })
-
-const inputClass =
-  'w-full px-3 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-white text-xs placeholder-slate-500 focus:outline-none focus:border-rose-400 transition'
+const draft = reactive({ title: '', tags: '', outline: '' })
+const draftTagList = computed(() => parseTags(draft.tags))
 
 const DEFAULT_OUTLINE = '中心主题\n  分支一\n    叶子节点\n  分支二\n    另一个叶子'
 
@@ -81,9 +83,15 @@ const thumbs = computed(() => {
 
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase()
-  if (!q) return items.value
-  return items.value.filter((m) => String(m.title || '').toLowerCase().includes(q))
+  return items.value.filter((m) => {
+    const tags = m.tags || []
+    if (activeTag.value !== 'ALL' && !tags.includes(activeTag.value)) return false
+    if (!q) return true
+    return [m.title, m.outline, ...tags].filter(Boolean).some((f) => String(f).toLowerCase().includes(q))
+  })
 })
+
+const allTags = computed(() => [...new Set(items.value.flatMap((item) => item.tags || []))])
 
 const activeMap = computed(() => items.value.find((m) => m.id === selectedId.value) || null)
 
@@ -180,23 +188,63 @@ function nodeByUid(uid) {
 
 function openMap(map) {
   selectedId.value = map.id
-  Object.assign(draft, { title: map.title, outline: map.outline || '' })
+  Object.assign(draft, { title: map.title, tags: (map.tags || []).join(', '), outline: map.outline || '' })
   mode.value = 'graph'
   resetInteraction()
   rebuildTree()
+  tagInput.value = ''
   nextTick(() => fitView())
 }
 
 function startNew() {
   selectedId.value = 'new'
-  Object.assign(draft, { title: '新建导图', outline: DEFAULT_OUTLINE })
+  Object.assign(draft, { title: '新建导图', tags: activeTag.value === 'ALL' ? '' : activeTag.value, outline: DEFAULT_OUTLINE })
   mode.value = 'edit'
   resetInteraction()
   rebuildTree()
+  tagInput.value = ''
+}
+
+function addTag() {
+  const tag = tagInput.value.trim()
+  if (!tag) return
+  const tags = parseTags(draft.tags)
+  if (!tags.includes(tag)) tags.push(tag)
+  draft.tags = tags.join(', ')
+  tagInput.value = ''
+}
+
+function removeTag(tag) {
+  draft.tags = parseTags(draft.tags).filter((item) => item !== tag).join(', ')
+}
+
+function onTagKey(event) {
+  if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault()
+    addTag()
+  }
+  if (event.key === 'Backspace' && !tagInput.value.trim() && draftTagList.value.length) {
+    draft.tags = draftTagList.value.slice(0, -1).join(', ')
+  }
 }
 
 function closeEditor() {
   selectedId.value = null
+}
+
+function openSearch() {
+  searchOpen.value = true
+  nextTick(() => searchEl.value?.focus())
+}
+
+function closeSearch() {
+  search.value = ''
+  searchOpen.value = false
+}
+
+function toggleSearch() {
+  if (searchOpen.value) closeSearch()
+  else openSearch()
 }
 
 function toggleMode() {
@@ -216,7 +264,7 @@ async function save() {
     return
   }
   if (mode.value === 'graph') commitTree()
-  const payload = { title: draft.title.trim(), outline: draft.outline }
+  const payload = { title: draft.title.trim(), tags: parseTags(draft.tags), outline: draft.outline }
   saving.value = true
   try {
     if (selectedId.value === 'new') {
@@ -663,6 +711,17 @@ function edgeWidth(edge) {
 
 // ---- 快捷键（选中节点后：Tab 加子节点 / Enter 编辑 / Delete 删除） ----
 
+function onSearchKeydown(event) {
+  const tag = document.activeElement?.tagName
+  const typing = ['INPUT', 'TEXTAREA', 'SELECT'].includes(tag)
+  if (typing || selectedId.value != null) return
+  if (event.key === '/' || ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k')) {
+    event.preventDefault()
+    openSearch()
+  }
+  if (event.key === 'Escape' && searchOpen.value) closeSearch()
+}
+
 function onGlobalKeydown(e) {
   if (menu.state.visible) return
   if (mode.value !== 'graph' || editingUid.value != null || selectedId.value == null) return
@@ -704,12 +763,14 @@ onMounted(() => {
     { key: 'refresh', label: '刷新', action: load },
   ], '思维导图')
   load()
+  window.addEventListener('keydown', onSearchKeydown)
   window.addEventListener('keydown', onGlobalKeydown)
 })
 
 onBeforeUnmount(() => {
   observer?.disconnect()
   window.removeEventListener('keydown', onGlobalKeydown)
+  window.removeEventListener('keydown', onSearchKeydown)
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   window.removeEventListener('pointercancel', onPointerUp)
@@ -726,12 +787,20 @@ onBeforeUnmount(() => {
           <span class="text-sm font-semibold text-slate-100">思维导图</span>
           <span class="text-[10px] font-mono text-slate-500">{{ items.length }}</span>
         </div>
-        <div class="relative">
-          <Icon name="search" :size="13" class="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-500 pointer-events-none" />
+        <button
+          class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
+          title="搜索（/）"
+          @click="toggleSearch"
+        >
+          <Icon name="search" :size="13" />
+        </button>
+        <div v-if="searchOpen" class="relative min-w-[100px] max-w-[180px]">
           <input
+            ref="searchEl"
             v-model="search"
-            class="w-36 sm:w-52 pl-8 pr-2.5 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none focus:border-rose-400 transition"
-            placeholder="搜索导图"
+            class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-rose-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
+            placeholder="搜索"
+            @keydown.esc="closeSearch"
           />
         </div>
         <button
@@ -740,6 +809,11 @@ onBeforeUnmount(() => {
         >
           <Icon name="plus" :size="14" /> 新建
         </button>
+      </div>
+
+      <div v-if="allTags.length" class="flex-shrink-0 flex items-center gap-1 overflow-x-auto no-scrollbar pb-1.5 mb-1 text-[11px] font-mono">
+        <button class="px-2 py-0.5 rounded-lg whitespace-nowrap border transition-all" :class="activeTag === 'ALL' ? 'bg-rose-600 text-white border-rose-400/40' : 'bg-white/5 text-slate-400 border-white/5'" @click="activeTag = 'ALL'">全部</button>
+        <button v-for="tag in allTags" :key="tag" class="px-2 py-0.5 rounded-lg whitespace-nowrap border transition-all" :class="activeTag === tag ? 'bg-rose-600 text-white border-rose-400/40' : 'bg-white/5 text-slate-400 border-white/5'" @click="activeTag = tag">{{ tag }}</button>
       </div>
 
       <div class="flex-1 min-h-0 overflow-y-auto custom-scroll pr-1">
@@ -794,6 +868,9 @@ onBeforeUnmount(() => {
                 <span class="text-[9px] text-slate-500 font-mono shrink-0">{{ relativeTime(map.updated_at) }}</span>
               </div>
               <p class="text-[10px] text-slate-400 mt-1 line-clamp-2">{{ excerpt(map.outline) || '（空大纲）' }}</p>
+              <div v-if="(map.tags || []).length" class="flex items-center gap-1 mt-2 flex-wrap">
+                <span v-for="tag in map.tags.slice(0, 4)" :key="tag" class="text-[9px] px-1.5 py-px rounded-md border" :class="tagColor(tag)">{{ tag }}</span>
+              </div>
             </div>
           </button>
         </div>
@@ -810,13 +887,10 @@ onBeforeUnmount(() => {
         >
           <Icon name="chevronLeft" :size="15" />
         </button>
-        <input
-          v-model="draft.title"
-          :class="inputClass"
-          class="flex-1 !text-sm font-semibold"
-          placeholder="导图标题"
-        />
-
+        <span class="text-[11px] font-mono text-slate-500 truncate">
+          {{ selectedId === 'new' ? '新建导图' : '编辑导图' }}
+        </span>
+        <div class="flex-1" />
         <button
           class="p-1.5 rounded-xl border transition"
           :class="mode === 'edit' ? 'bg-rose-600/80 text-white border-rose-400/30' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'"
@@ -844,19 +918,44 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <!-- 编辑：大纲文本 -->
-      <textarea
+      <div class="flex-1 min-h-0 flex flex-col rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 overflow-hidden">
+        <input
+          v-model="draft.title"
+          class="w-full flex-shrink-0 bg-transparent px-4 sm:px-5 pt-4 pb-2 text-base sm:text-lg font-semibold text-white caret-rose-400 placeholder-slate-500 focus:outline-none selectable"
+          placeholder="导图标题"
+        />
+
+        <div class="flex-shrink-0 flex flex-wrap items-center gap-1.5 px-4 sm:px-5 pb-3">
+          <Icon name="tag" :size="13" class="text-slate-500 shrink-0" />
+          <template v-for="tag in draftTagList" :key="tag">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border" :class="tagColor(tag)">
+              {{ tag }}
+              <button type="button" class="hover:text-white" @click="removeTag(tag)">×</button>
+            </span>
+          </template>
+          <input
+            v-model="tagInput"
+            class="flex-1 min-w-[5rem] bg-transparent text-[11px] text-slate-300 caret-rose-400 placeholder-slate-600 focus:outline-none selectable"
+            placeholder="输入标签后回车"
+            @keydown="onTagKey"
+          />
+        </div>
+
+        <div class="flex-shrink-0 h-px bg-white/10" />
+
+        <!-- 编辑：大纲文本 -->
+        <textarea
         v-if="mode === 'edit'"
         v-model="draft.outline"
-        class="flex-1 min-h-0 w-full resize-none rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 p-3.5 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none focus:border-rose-400/40 selectable"
+        class="flex-1 min-h-0 w-full resize-none bg-transparent px-4 sm:px-5 py-4 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none selectable custom-scroll"
         placeholder="每行一个节点，用缩进表示层级：&#10;中心主题&#10;  分支一&#10;    叶子&#10;  分支二"
-      />
+        />
 
-      <!-- 预览 / 内联编辑：可平移缩放的导图画布 -->
-      <div
+        <!-- 预览 / 内联编辑：可平移缩放的导图画布 -->
+        <div
         v-else
         ref="canvasEl"
-        class="flex-1 min-h-0 relative overflow-hidden rounded-2xl bg-slate-900/45 backdrop-blur-md border border-white/10 select-none"
+        class="flex-1 min-h-0 relative overflow-hidden select-none"
         :class="panning ? 'cursor-grabbing' : 'cursor-grab'"
         :style="canvasStyle"
         @pointerdown="onPointerDown"
@@ -989,6 +1088,7 @@ onBeforeUnmount(() => {
               <Icon name="download" :size="14" />
             </button>
           </div>
+        </div>
         </div>
       </div>
 

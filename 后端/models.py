@@ -20,9 +20,9 @@ def shanghai_now() -> datetime:
     return datetime.now(ZoneInfo("Asia/Shanghai"))
 
 
-# 待办事项（原提醒改名），支持一次性与循环两种。
-# 输入口径：标题/内容/到期日/是否提醒/提醒日/循环模式；remind_time 由前端显式传入。
-# 字段关系：need_remind=false 时日期置空、循环写 none（免提醒标记）；未传 remind_time 时后端按 due_time - advance_days 兜底。
+# 待办事项，支持一次性与循环两种。
+# 输入字段包括标题、内容、到期日期、提醒日期、循环模式和 MQTT 推送时间。
+# remind_time 是可选的页面提醒日期；mqtt_at 是可选的精确 MQTT 推送时间。
 class Todo(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -31,17 +31,13 @@ class Todo(SQLModel, table=True):
     content: str
 
     processed: bool = Field(default=False)
-    need_remind: bool = Field(default=False)
-
+    closed_reason: Optional[str] = Field(default=None)  # done / cancelled
     due_time: Optional[date] = Field(default=None)
     remind_time: Optional[date] = Field(default=None)
-    advance_days: Optional[int] = Field(default=3)  # 提醒提前天数：未显式给提醒日时默认提前 3 天
 
-    # MQTT 提醒（push-server 双向同步）：开关独立于 need_remind；push_at 为展示/同步用
-    # 的排期（真相在 push-server 的 tasks.json）；push_task_id 为回执；last_callback_ref
-    # 防回调重试重复推进（processed/snooze 见 routers）。
-    push_enabled: bool = Field(default=False)
-    push_at: Optional[datetime] = Field(default=None)
+    # MQTT 开启后 mqtt_at 必须是完整的北京时间日期时间。
+    mqtt_enabled: bool = Field(default=False)
+    mqtt_at: Optional[datetime] = Field(default=None)
     push_task_id: Optional[int] = Field(default=None)
     last_callback_ref: Optional[str] = Field(default=None)
 
@@ -61,8 +57,8 @@ class Todo(SQLModel, table=True):
 
     created_at: date = Field(default_factory=date.today)
 
-    @field_serializer("push_at", when_used="json")
-    def serialize_push_at(self, value: Optional[datetime]) -> Optional[str]:
+    @field_serializer("mqtt_at", when_used="json")
+    def serialize_mqtt_at(self, value: Optional[datetime]) -> Optional[str]:
         """SQLite 读取后无时区的排期仍是北京时间；接口始终返回明确的 +08:00。"""
         if value is None:
             return None
@@ -159,6 +155,7 @@ class MindMap(SQLModel, table=True):
     id: Optional[int] = Field(default=None, primary_key=True)
 
     title: str
+    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
     outline: str = Field(default="")
 
     created_at: date = Field(default_factory=date.today)

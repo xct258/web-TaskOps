@@ -60,7 +60,7 @@ def _request(method: str, url: str, body: dict | None, token: str, timeout: int 
 
 def _to_iso(dt) -> str:
     """排期转北京时间 ISO，投递与页面返回的时区口径一致。"""
-    return parse_push_at(dt).isoformat()
+    return parse_mqtt_at(dt).isoformat()
 
 
 def build_task_payload(todo, config: dict) -> dict:
@@ -77,7 +77,7 @@ def build_task_payload(todo, config: dict) -> dict:
         "topic": config["topic"],
         "title": todo.title or "",
         "message": "\n".join(lines),
-        "schedule_at": _to_iso(todo.push_at),
+        "schedule_at": _to_iso(todo.mqtt_at),
         "recurring": bool(todo.recurring),
     }
 
@@ -85,11 +85,11 @@ def build_task_payload(todo, config: dict) -> dict:
 def upsert_push_task(todo, config: dict | None = None) -> int:
     """建/改提醒任务，返回对端 task_id；失败抛 PushSyncError。
 
-    前置：todo.id 与 todo.push_at 必须就位（新建时先 flush 拿 id）。
+    前置：todo.id 与 todo.mqtt_at 必须就位（新建时先 flush 拿 id）。
     """
     config = config or get_push_sync_config()
-    if not todo.push_at:
-        raise PushSyncError("push_at 为空，无法投递")
+    if not todo.mqtt_at:
+        raise PushSyncError("mqtt_at 为空，无法投递")
     res = _request("POST", f"{config['base_url']}/api/task",
                    build_task_payload(todo, config), config["token"])
     task_id = res.get("task_id")
@@ -112,21 +112,21 @@ def cancel_push_task(todo_id: int, config: dict | None = None) -> int:
     return n
 
 
-def parse_push_at(raw) -> datetime:
-    """推送时间统一解析（前端 datetime-local 无时区→上海；结果一律上海 aware）。
+def parse_mqtt_at(raw) -> datetime:
+    """MQTT 推送时间统一解析（无时区按上海；结果一律上海 aware）。
 
-    失败抛 ValueError，调用方转 400。调试：报 Invalid push_at 多半是格式多了秒或时区。
+    失败抛 ValueError，调用方转 400。
     """
     if isinstance(raw, datetime):
         dt = raw
     else:
         text = str(raw or "").strip().replace("Z", "+00:00")
         if not text:
-            raise ValueError("empty push_at")
+            raise ValueError("empty mqtt_at")
         try:
             dt = datetime.fromisoformat(text)
         except Exception:
-            raise ValueError(f"invalid push_at: {raw!r}")
+            raise ValueError(f"invalid mqtt_at: {raw!r}")
     if dt.tzinfo is None:
         return dt.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
     return dt.astimezone(ZoneInfo("Asia/Shanghai"))

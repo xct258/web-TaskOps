@@ -9,6 +9,7 @@
 """
 from pathlib import Path
 
+from sqlalchemy import inspect
 from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine
 
@@ -76,7 +77,9 @@ def make_session_getter(engine, *tables, name="session"):
 
 
 def init_db() -> None:
-    """建全库表（启动时调一次即可，表已存在时是空操作）。"""
+    """建全库表；开发阶段检测到旧待办结构时重建待办表。"""
+    _reset_legacy_todo_table()
+    _reset_legacy_mindmap_table()
     SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__])
     SQLModel.metadata.create_all(bookmark_engine, tables=[Bookmark.__table__])
     SQLModel.metadata.create_all(
@@ -88,6 +91,25 @@ def init_db() -> None:
     )
     SQLModel.metadata.create_all(note_engine, tables=[Note.__table__])
     SQLModel.metadata.create_all(mindmap_engine, tables=[MindMap.__table__])
+
+
+def _reset_legacy_todo_table() -> None:
+    """项目开发阶段切换待办模型时清理旧表，避免旧列导致 API 500。"""
+    inspector = inspect(todo_engine)
+    if not inspector.has_table("todo"):
+        return
+    columns = {column["name"] for column in inspector.get_columns("todo")}
+    if "mqtt_enabled" not in columns or "mqtt_at" not in columns or "closed_reason" not in columns:
+        Todo.__table__.drop(todo_engine, checkfirst=True)
+
+
+def _reset_legacy_mindmap_table() -> None:
+    """导图结构新增标签字段时，开发阶段重建旧表。"""
+    inspector = inspect(mindmap_engine)
+    if inspector.has_table("mindmap"):
+        columns = {column["name"] for column in inspector.get_columns("mindmap")}
+        if "tags" not in columns:
+            MindMap.__table__.drop(mindmap_engine, checkfirst=True)
 
 
 # ---------------------------------------------------------------------------

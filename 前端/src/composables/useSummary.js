@@ -34,15 +34,11 @@ export async function loadSummary() {
     summary.asset = asset?.amount ?? null
     summary.liability = liability?.amount ?? null
     summary.bookmarkTotal = bookmarks.length
-    // 第一数：已到提醒日的未完成 + 未设置提醒的未完成；第二数：其中已逾期的
+    // 第一数：已到提醒日的未完成 + 未设置提醒日期的未完成；第二数：其中已逾期的
     const reachedTodos = todos.filter((t) => {
       if (t.processed) return false
-      if (!t.need_remind || !t.due_time) return true
-      const due = String(t.due_time)
-      const advance = t.advance_days ?? 3
-      const remind = new Date(new Date(due).getTime() - advance * 86400000)
-      const remindStr = remind.toISOString().split('T')[0]
-      return remindStr <= today
+      if (!t.remind_time) return true
+      return String(t.remind_time).slice(0, 10) <= today
     })
     summary.todoTotal = reachedTodos.length
     summary.todoDone = reachedTodos.filter((t) => t.processed).length

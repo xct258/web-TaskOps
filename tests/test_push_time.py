@@ -27,26 +27,26 @@ class PushTimeTests(unittest.TestCase):
         for input_time in ("2026-10-12T20:30:00+08:00", "2026-10-12T12:30:00Z", "2026-10-12T20:30"):
             with self.subTest(input_time=input_time):
                 todo = Todo.model_validate({
-                    "title": "MQTT 时间测试", "content": "测试", "push_enabled": True,
-                    "push_at": input_time,
+                    "title": "MQTT 时间测试", "content": "测试", "mqtt_enabled": True,
+                    "mqtt_at": input_time,
                 })
                 with patch.object(todos, "upsert_push_task", return_value=7):
                     created = todos.create_todo(todo, self.session)
-                    self.assertEqual(jsonable_encoder(created)["push_at"], "2026-10-12T20:30:00+08:00")
+                    self.assertEqual(jsonable_encoder(created)["mqtt_at"], "2026-10-12T20:30:00+08:00")
                     payload = build_task_payload(created, {"server_name": "taskops", "topic": "taskops/todo"})
                     self.assertEqual(payload["schedule_at"], "2026-10-12T20:30:00+08:00")
                     self.session.expire_all()
                     reloaded = todos.get_todos(limit=200, session=self.session)
                     row = next(item for item in reloaded if item.id == created.id)
-                    self.assertEqual(jsonable_encoder(row)["push_at"], "2026-10-12T20:30:00+08:00")
-                    updated = todos.update_todo(created.id, {"push_at": "2026-10-12T16:00:00Z"}, self.session)
-                    self.assertEqual(jsonable_encoder(updated)["push_at"], "2026-10-13T00:00:00+08:00")
+                    self.assertEqual(jsonable_encoder(row)["mqtt_at"], "2026-10-12T20:30:00+08:00")
+                    updated = todos.update_todo(created.id, {"mqtt_at": "2026-10-12T16:00:00Z"}, self.session)
+                    self.assertEqual(jsonable_encoder(updated)["mqtt_at"], "2026-10-13T00:00:00+08:00")
 
     def test_serializer_converts_aware_time_and_preserves_empty(self):
-        todo = Todo(title="测试", content="测试", push_at=datetime(2026, 10, 12, 12, 30, tzinfo=timezone.utc))
-        self.assertEqual(jsonable_encoder(todo)["push_at"], "2026-10-12T20:30:00+08:00")
-        todo.push_at = None
-        self.assertIsNone(jsonable_encoder(todo)["push_at"])
+        todo = Todo(title="测试", content="测试", mqtt_at=datetime(2026, 10, 12, 12, 30, tzinfo=timezone.utc))
+        self.assertEqual(jsonable_encoder(todo)["mqtt_at"], "2026-10-12T20:30:00+08:00")
+        todo.mqtt_at = None
+        self.assertIsNone(jsonable_encoder(todo)["mqtt_at"])
 
 
 if __name__ == "__main__":

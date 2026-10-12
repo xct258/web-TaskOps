@@ -1,8 +1,7 @@
-"""待办接口（原提醒改名，路由 /todos；字段 remind_time 等历史列名保留）。
+"""待办接口：到期日期、提醒日期和可选 MQTT 精确推送时间。
 
-输入口径：标题(title)/内容(content)/到期日(due_time)/是否提醒(need_remind)/提醒日(remind_time)/循环模式(cycle_mode)。
-- ``need_remind`` 显式传入为准；false 时日期置空、循环写 none（免提醒标记）。
-- ``remind_time`` 显式传入为准；不传时按 ``due_time - advance_days`` 兜底。
+- ``due_time`` 是到期日期，``remind_time`` 是页面提醒日期。
+- ``mqtt_enabled`` 开启后必须提供 ``mqtt_at``，由 push-server 投递 MQTT。
 - 循环模式：``once``（或不传）= 一次性；``daily/weekly/monthly/month_start/yearly/days``
   = 循环（``recurring`` 自动置 True，``days`` 模式再配 ``cycle_days``）。
 
@@ -13,8 +12,7 @@
 - 完成前会把旧状态存到 ``undo_snapshot``，``POST /todos/{rid}/undo`` 可回滚上一次完成。
 
 MQTT 提醒（push-server 双向同步，逻辑在 push_sync.py）：
-- 新字段：``push_enabled``（独立开关）/``push_at``（排期展示）/``push_task_id``（回执）；
-  开提醒必须给 ``push_at``（否则 400）。
+- ``mqtt_enabled`` 控制开关，``mqtt_at`` 保存精确排期，``push_task_id`` 保存回执。
 - 内存改完→先同步→再 commit，同步失败 rollback + 502（两边一致，无孤儿任务）。
 - ``processed``/``snooze`` 接受可选 ``callback_ref``（回调幂等，重放跳过推进）。
 
@@ -40,7 +38,7 @@ from sqlmodel import Session, select
 
 from db import get_todo_session
 from models import Todo
-from push_sync import PushSyncError, cancel_push_task, parse_push_at, upsert_push_task
+from push_sync import PushSyncError, cancel_push_task, parse_mqtt_at, upsert_push_task
 from utils import calc_next_due, calc_next_due_after, parse_due_date
 
 logger = logging.getLogger(__name__)
@@ -104,55 +102,44 @@ def create_todo(data: Todo, session: Session = Depends(get_todo_session)):
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
 
     data.created_at = today
-    data.need_remind = bool(data.need_remind)
-
     if not (data.title or "").strip() or not (data.content or "").strip():
         raise HTTPException(400, "title and content are required")
 
-    if not data.need_remind:
-        # 不提醒：日期置空、循环写 none，只留标题内容
-        data.due_time = None
+    if not data.due_time:
         data.remind_time = None
         data.recurring = False
         data.cycle_mode = NO_CYCLE
     else:
-        if not data.due_time:
-            data.due_time = today
-        else:
-            # 字符串写法容错：解析失败则落到今天
-            try:
-                data.due_time = _parse_date_field(data.due_time)
-            except Exception:
-                data.due_time = today
+        try:
+            data.due_time = _parse_date_field(data.due_time)
+        except Exception:
+            raise HTTPException(status_code=400, detail="Invalid due_time format")
 
         if data.remind_time:
-            # 显式传入的提醒日为准
             try:
                 data.remind_time = _parse_date_field(data.remind_time)
             except Exception:
-                data.remind_time = data.due_time
+                raise HTTPException(status_code=400, detail="Invalid remind_time format")
         else:
-            adv = data.advance_days or 0
-            data.remind_time = data.due_time - timedelta(days=adv)
+            data.remind_time = data.due_time
         _normalize_cycle(data)
 
-    # MQTT 提醒：开关独立于 need_remind；开提醒必须给时间；先入库拿 id 再投递
-    data.push_enabled = bool(data.push_enabled)
+    data.mqtt_enabled = bool(data.mqtt_enabled)
     data.push_task_id = None
     data.last_callback_ref = None
-    if data.push_enabled:
-        if not data.push_at:
-            raise HTTPException(400, "push_at is required when push_enabled")
+    if data.mqtt_enabled:
+        if not data.mqtt_at:
+            raise HTTPException(400, "mqtt_at is required when mqtt_enabled")
         try:
-            data.push_at = parse_push_at(data.push_at)
+            data.mqtt_at = parse_mqtt_at(data.mqtt_at)
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid push_at format")
+            raise HTTPException(status_code=400, detail="Invalid mqtt_at format")
     else:
-        data.push_at = None
+        data.mqtt_at = None
 
     session.add(data)
     session.flush()  # 拿 id 投递（未 commit，失败可回滚，不留孤儿任务）
-    if data.push_enabled:
+    if data.mqtt_enabled:
         _sync_upsert_or_502(session, data)
     session.commit()
     session.refresh(data)
@@ -183,65 +170,57 @@ def update_todo(
     if "processed" in payload:
         # 允许重新打开（误触完成可撤销；循环行打卡后也可回退）
         r.processed = bool(payload["processed"])
+        r.closed_reason = payload.get("closed_reason", "done") if r.processed else None
 
-    if "need_remind" in payload:
-        r.need_remind = bool(payload["need_remind"])
+    for field in ["recurring", "cycle_mode", "cycle_days"]:
+        if field in payload:
+            setattr(r, field, payload[field])
 
-    if not r.need_remind:
-        # 不提醒：日期置空、循环写 none，只留标题内容
-        r.due_time = None
-        r.remind_time = None
-        r.recurring = False
-        r.cycle_mode = NO_CYCLE
-    else:
-        if not r.due_time:
-            r.due_time = today
-        for field in ["advance_days", "recurring", "cycle_mode", "cycle_days"]:
-            if field in payload:
-                setattr(r, field, payload[field])
-
-        if "due_time" in payload and payload["due_time"]:
+    if "due_time" in payload:
+        if payload["due_time"]:
             try:
                 r.due_time = _parse_date_field(payload["due_time"])
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid due_time format")
-
+        else:
+            r.due_time = None
+    if r.due_time:
         if "remind_time" in payload and payload["remind_time"]:
-            # 显式传入的提醒日为准
             try:
                 r.remind_time = _parse_date_field(payload["remind_time"])
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid remind_time format")
-        elif r.due_time and ("due_time" in payload or "advance_days" in payload or not r.remind_time):
-            # 只在改到期日/提前天数、或提醒日本来缺失时重算；无关编辑不再覆盖显式提醒日
-            adv = r.advance_days or 0
-            r.remind_time = r.due_time - timedelta(days=adv)
-
+        elif "due_time" in payload or not r.remind_time:
+            r.remind_time = r.due_time
         if "cycle_mode" in payload:
             _normalize_cycle(r)
         elif r.recurring and not r.cycle_mode:
             r.cycle_mode = "daily"
+    else:
+        r.remind_time = None
+        r.recurring = False
+        r.cycle_mode = NO_CYCLE
 
     # MQTT 提醒同步（内存改完→先同步→再 commit，失败回滚+502；每次编辑都重投递保鲜）
-    if "push_enabled" in payload:
-        r.push_enabled = bool(payload["push_enabled"])
-    if "push_at" in payload:
-        if payload["push_at"]:
+    if "mqtt_enabled" in payload:
+        r.mqtt_enabled = bool(payload["mqtt_enabled"])
+    if "mqtt_at" in payload:
+        if payload["mqtt_at"]:
             try:
-                r.push_at = parse_push_at(payload["push_at"])
+                r.mqtt_at = parse_mqtt_at(payload["mqtt_at"])
             except ValueError:
-                raise HTTPException(status_code=400, detail="Invalid push_at format")
+                raise HTTPException(status_code=400, detail="Invalid mqtt_at format")
         else:
-            r.push_at = None
-    if r.push_enabled and not r.push_at:
-        raise HTTPException(400, "push_at is required when push_enabled")
-    if r.push_enabled and not (r.processed and not r.recurring):
+            r.mqtt_at = None
+    if r.mqtt_enabled and not r.mqtt_at:
+        raise HTTPException(400, "mqtt_at is required when mqtt_enabled")
+    if r.mqtt_enabled and not (r.processed and not r.recurring):
         _sync_upsert_or_502(session, r)
     else:
         if r.push_task_id:
             _sync_cancel_or_502(session, r.id)
             r.push_task_id = None
-        r.push_at = None
+        r.mqtt_at = None
 
     session.commit()
     session.refresh(r)
@@ -254,6 +233,7 @@ def _snapshot(r: Todo) -> dict:
         "due_time": r.due_time.isoformat() if r.due_time else None,
         "remind_time": r.remind_time.isoformat() if r.remind_time else None,
         "processed": r.processed,
+        "closed_reason": r.closed_reason,
         "last_completed_date": r.last_completed_date.isoformat() if r.last_completed_date else None,
     }
 
@@ -266,7 +246,7 @@ def mark_processed(
 ):
     """完成打卡；body 可带 callback_ref（push-server 回调幂等：重放只跳过推进，不跳过同步）。
 
-    循环+开推送：push_at 按 due 偏移同步平移并 upsert 建下一期（先同步后 commit）；
+    循环+开 MQTT：mqtt_at 按到期日变化同步平移并 upsert 建下一期（先同步后 commit）；
     一次性+开推送：cancel 对端任务（best-effort，失败只记日志，不拦完成）。
     """
     r = session.get(Todo, rid)
@@ -275,6 +255,9 @@ def mark_processed(
 
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
     callback_ref = (body or {}).get("callback_ref")
+    action = (body or {}).get("action", "done")
+    if action not in ("done", "cancelled"):
+        raise HTTPException(400, "action 只能是 done 或 cancelled")
     replay = bool(callback_ref and r.last_callback_ref == callback_ref)
 
     if not replay:
@@ -293,22 +276,24 @@ def mark_processed(
                 # 跳过已错过的周期：下一次严格晚于今天（daily 即明天）
                 next_due = calc_next_due_after(r, base_due, today)
             # 循环顺延：推送时间按到期日偏移同步平移
-            if r.push_enabled and r.push_at and old_due and next_due:
+            if r.mqtt_enabled and r.mqtt_at and old_due and next_due:
                 try:
-                    r.push_at = parse_push_at(r.push_at) + (next_due - old_due)
+                    r.mqtt_at = parse_mqtt_at(r.mqtt_at) + (next_due - old_due)
                 except ValueError:
-                    r.push_at = None
+                    r.mqtt_at = None
             r.due_time = next_due
-            adv = r.advance_days or 0
-            r.remind_time = next_due - timedelta(days=adv)
+            reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
+            r.remind_time = next_due - reminder_offset
             r.processed = False
+            r.closed_reason = None
         else:
             r.processed = True
+            r.closed_reason = action
 
     # 推送同步：循环建下一期（失败回滚+502）；一次性取消对端（best-effort）
-    if r.push_enabled and r.push_at and not (r.processed and not r.recurring):
+    if r.mqtt_enabled and r.mqtt_at and not (r.processed and not r.recurring):
         _sync_upsert_or_502(session, r)
-    elif not r.recurring and (r.push_task_id or r.push_enabled):
+    elif not r.recurring and (r.push_task_id or r.mqtt_enabled):
         try:
             cancel_push_task(r.id)
         except PushSyncError as e:
@@ -339,6 +324,7 @@ def undo_processed(
         _parse_date_field(snap["last_completed_date"]) if snap.get("last_completed_date") else None
     )
     r.processed = bool(snap.get("processed"))
+    r.closed_reason = snap.get("closed_reason")
     r.undo_snapshot = None
 
     session.commit()
@@ -354,8 +340,8 @@ def snooze_todo(
 ):
     """行内推迟：循环任务顺延一个周期，一次性任务 +1 天（从 due/今天中较晚者起算）。
 
-    body 可带 callback_ref（幂等）与 push_at（MQTT 回调只回写推送排期，不改到期/提醒日，不 upsert）；
-    手动推迟+开推送：push_at 按 due 偏移平移并 upsert（先同步后 commit）。
+    body 可带 callback_ref（幂等）与 mqtt_at（MQTT 回调只回写推送排期，不改到期/提醒日，不 upsert）；
+    手动推迟+开 MQTT：mqtt_at 按到期日偏移平移并 upsert。
     """
     r = session.get(Todo, rid)
     if not r:
@@ -364,16 +350,16 @@ def snooze_todo(
     callback_ref = body.get("callback_ref")
     replay = bool(callback_ref and r.last_callback_ref == callback_ref)
 
-    # MQTT 提醒独立于到期提醒；对端已完成分钟级推迟，这里只回写排期。
-    if body.get("push_at"):
-        if not r.push_enabled:
+    # MQTT 回调只回写精确推送时间，不修改到期日和提醒日。
+    if body.get("mqtt_at"):
+        if not r.mqtt_enabled:
             raise HTTPException(400, "push reminder is disabled")
         try:
-            push_at = parse_push_at(body["push_at"])
+            mqtt_at = parse_mqtt_at(body["mqtt_at"])
         except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid push_at format")
+            raise HTTPException(status_code=400, detail="Invalid mqtt_at format")
         if not replay:
-            r.push_at = push_at
+            r.mqtt_at = mqtt_at
             if callback_ref:
                 r.last_callback_ref = callback_ref
             if body.get("note"):
@@ -381,9 +367,6 @@ def snooze_todo(
         session.commit()
         session.refresh(r)
         return r
-
-    if not r.need_remind:
-        raise HTTPException(400, "only reminder todos can snooze")
 
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
     if not replay:
@@ -394,19 +377,19 @@ def snooze_todo(
         anchor = base if base > today else today
         next_due = calc_next_due(r, anchor) if r.recurring else anchor + timedelta(days=1)
 
-        if r.push_enabled:
-            if r.push_at and old_due and next_due:
+        if r.mqtt_enabled:
+            if r.mqtt_at and old_due and next_due:
                 # 手动推迟：推送时间按到期日偏移同步平移
                 try:
-                    r.push_at = parse_push_at(r.push_at) + (next_due - old_due)
+                    r.mqtt_at = parse_mqtt_at(r.mqtt_at) + (next_due - old_due)
                 except ValueError:
-                    r.push_at = None
+                    r.mqtt_at = None
         r.due_time = next_due
-        adv = r.advance_days or 0
-        r.remind_time = next_due - timedelta(days=adv)
+        reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
+        r.remind_time = next_due - reminder_offset
 
     # 手动推迟需同步新的推送排期。
-    if r.push_enabled and r.push_at:
+    if r.mqtt_enabled and r.mqtt_at:
         _sync_upsert_or_502(session, r)
 
     session.commit()
@@ -423,7 +406,7 @@ def delete_todo(
     if not r:
         raise HTTPException(404, "Todo not found")
     # 先取消对端任务（失败 502，不删行，防幽灵推送）
-    if r.push_task_id or r.push_enabled:
+    if r.push_task_id or r.mqtt_enabled:
         _sync_cancel_or_502(session, r.id)
     session.delete(r)
     session.commit()

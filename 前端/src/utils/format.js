@@ -101,19 +101,35 @@ export function relativeTime(value) {
 
 /** 今天（Asia/Shanghai 语义下的本地今天）的 YYYY-MM-DD。 */
 export function todayISO() {
-  const now = new Date()
-  const y = now.getFullYear()
-  const m = String(now.getMonth() + 1).padStart(2, '0')
-  const d = String(now.getDate()).padStart(2, '0')
+  const now = new Date(Date.now() + 8 * 3600e3)
+  const y = now.getUTCFullYear()
+  const m = String(now.getUTCMonth() + 1).padStart(2, '0')
+  const d = String(now.getUTCDate()).padStart(2, '0')
   return `${y}-${m}-${d}`
+}
+
+/** 纯日期按天平移，输入/输出均为 YYYY-MM-DD，不受浏览器时区影响。 */
+export function shiftDate(value, days) {
+  const match = /^(\d{4})-(\d{2})-(\d{2})/.exec(String(value || ''))
+  if (!match) return ''
+  const date = new Date(Date.UTC(+match[1], +match[2] - 1, +match[3] + Number(days || 0)))
+  if (Number.isNaN(date.getTime())) return ''
+  return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}-${String(date.getUTCDate()).padStart(2, '0')}`
 }
 
 /** 距今天还有多少天（负数表示已逾期）。 */
 export function daysUntil(value) {
+  const raw = String(value || '')
+  const dateOnly = /^(\d{4})-(\d{2})-(\d{2})/.exec(raw)
+  if (dateOnly) {
+    const target = Date.UTC(+dateOnly[1], +dateOnly[2] - 1, +dateOnly[3])
+    const today = todayISO().split('-').map(Number)
+    const start = Date.UTC(today[0], today[1] - 1, today[2])
+    return Math.round((target - start) / 86400000)
+  }
   const d = parseDate(value)
   if (!d) return null
-  const today = parseDate(todayISO())
-  return Math.round((d - today) / 86400000)
+  return Math.round((d - new Date()) / 86400000)
 }
 
 /* --------------------------- 业务元数据 --------------------------- */

@@ -40,15 +40,14 @@ const saving = ref(false)
 const form = reactive({
   title: '',
   content: '',
-  need_remind: false,
   due_time: '',
-  advance_days: 3,
+  remind_time: '',
   priority: 0,
   cycle_mode: '',
   cycle_days: 7,
   catch_up: false,
-  push_enabled: false,
-  push_at: '',
+  mqtt_enabled: false,
+  mqtt_at: '',
 })
 
 const confirmOpen = ref(false)
@@ -118,7 +117,7 @@ const stats = computed(() => {
   const total = reached.length
   const done = reached.filter((t) => t.processed).length
   const overdue = reached.filter((t) => {
-    if (t.processed || !t.need_remind || !t.due_time) return false
+    if (t.processed || !t.due_time) return false
     // 已逾期 = 到期日 < 今天（只是到了提醒日的不算逾期）
     return String(t.due_time).split('T')[0] < today
   }).length
@@ -126,12 +125,8 @@ const stats = computed(() => {
 })
 
 function reachedReminder(t) {
-  if (!t.need_remind || !t.due_time) return true
-  const due = String(t.due_time)
-  const advance = t.advance_days ?? 3
-  const remind = new Date(new Date(due).getTime() - advance * 86400000)
-  const remindStr = remind.toISOString().split('T')[0]
-  return remindStr <= todayISO()
+  if (!t.remind_time) return true
+  return String(t.remind_time).slice(0, 10) <= todayISO()
 }
 
 function matchesFilter(todo, key) {
@@ -139,8 +134,8 @@ function matchesFilter(todo, key) {
   if (key === 'all') return true
   if (key === 'done') return todo.processed
   if (key === 'pending') return !todo.processed
-  if (key === 'overdue') return !todo.processed && todo.need_remind && todo.due_time && String(todo.due_time).split('T')[0] < today
-  if (key === 'today') return !todo.processed && todo.need_remind && String(todo.due_time) === today
+  if (key === 'overdue') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < today
+  if (key === 'today') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) === today
   return true
 }
 
@@ -160,7 +155,7 @@ const visible = computed(() => {
 })
 
 function dueStatus(todo) {
-  if (!todo.need_remind || !todo.due_time) return null
+  if (!todo.due_time) return null
   if (todo.processed) return { label: `到期 ${formatDate(todo.due_time)}`, cls: 'text-slate-500' }
   const d = daysUntil(todo.due_time)
   if (d < 0) return { label: `逾期 ${-d} 天`, cls: 'text-rose-400' }
@@ -197,15 +192,14 @@ function openAdd() {
   Object.assign(form, {
     title: '',
     content: '',
-    need_remind: false,
     due_time: todayISO(),
-    advance_days: 3,
+    remind_time: todayISO(),
     priority: 0,
     cycle_mode: '',
     cycle_days: 7,
     catch_up: false,
-    push_enabled: false,
-    push_at: '',
+    mqtt_enabled: false,
+    mqtt_at: '',
   })
   modalOpen.value = true
 }
@@ -215,17 +209,24 @@ function openEdit(todo) {
   Object.assign(form, {
     title: todo.title,
     content: todo.content,
-    need_remind: !!todo.need_remind,
-    due_time: todo.due_time || todayISO(),
-    advance_days: todo.advance_days ?? 3,
+    due_time: String(todo.due_time || todayISO()).slice(0, 10),
+    remind_time: String(todo.remind_time || todo.due_time || todayISO()).slice(0, 10),
     priority: todo.priority ?? 0,
     cycle_mode: todo.recurring ? todo.cycle_mode || '' : '',
     cycle_days: todo.cycle_days || 7,
     catch_up: !!todo.catch_up,
-    push_enabled: !!todo.push_enabled,
-    push_at: toPushInput(todo.push_at),
+    mqtt_enabled: !!todo.mqtt_enabled,
+    mqtt_at: toPushInput(todo.mqtt_at),
   })
   modalOpen.value = true
+}
+
+function toggleMqtt() {
+  form.mqtt_enabled = !form.mqtt_enabled
+  if (form.mqtt_enabled && !form.mqtt_at) {
+    const date = form.remind_time || form.due_time
+    form.mqtt_at = date ? toPushISO(`${date}T09:00`) : ''
+  }
 }
 
 async function save() {
@@ -236,29 +237,26 @@ async function save() {
   const payload = {
     title: form.title.trim(),
     content: form.content.trim(),
-    need_remind: form.need_remind,
+    due_time: form.due_time || null,
+    remind_time: form.remind_time || null,
     priority: Number(form.priority) || 0,
     catch_up: form.catch_up,
-    push_enabled: form.push_enabled,
+    mqtt_enabled: form.mqtt_enabled,
   }
-  if (form.need_remind) {
-    payload.due_time = form.due_time || todayISO()
-    payload.advance_days = Number(form.advance_days) || 0
-    payload.cycle_mode = form.cycle_mode || 'none'
-    if (form.cycle_mode === 'days') payload.cycle_days = Number(form.cycle_days) || 1
-  }
-  if (form.push_enabled) {
-    if (!form.push_at) {
+  payload.cycle_mode = form.cycle_mode || 'none'
+  if (form.cycle_mode === 'days') payload.cycle_days = Number(form.cycle_days) || 1
+  if (form.mqtt_enabled) {
+    if (!form.mqtt_at) {
       toast.error('请先选择 MQTT 推送时间')
       return
     }
-    payload.push_at = toPushISO(form.push_at)
-    if (!payload.push_at) {
+    payload.mqtt_at = toPushISO(form.mqtt_at)
+    if (!payload.mqtt_at) {
       toast.error('MQTT 推送时间格式无效')
       return
     }
   } else {
-    payload.push_at = null
+    payload.mqtt_at = null
   }
 
   saving.value = true
@@ -378,11 +376,17 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
   <div class="h-full flex flex-col min-h-0">
     <!-- 工具条 -->
     <div class="flex-shrink-0 flex flex-wrap items-center gap-2 mb-2">
-      <div class="flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-mono">
+      <div
+        class="min-w-0 flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar overscroll-x-contain snap-x snap-mandatory pb-1 text-xs font-mono"
+        role="tablist"
+        aria-label="待办时间筛选"
+      >
         <button
           v-for="f in FILTERS"
           :key="f.key"
-          class="px-2.5 py-1 rounded-xl whitespace-nowrap border transition-all"
+          class="shrink-0 snap-start px-2.5 py-1 rounded-xl whitespace-nowrap border transition-all touch-pan-x"
+          role="tab"
+          :aria-selected="filter === f.key"
           :class="
             filter === f.key
               ? 'bg-sky-600 text-white border-sky-400/40'
@@ -443,8 +447,8 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           class="group relative flex items-start gap-2.5 p-3 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 transition-all"
           :class="{
             'hover:border-rose-400/40':
-              !todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < todayISO(),
-            'hover:border-sky-400/40': !(!todo.processed && todo.need_remind && todo.due_time && String(todo.due_time) < todayISO()),
+              !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < todayISO(),
+            'hover:border-sky-400/40': !(!todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < todayISO()),
           }"
           @click.capture="guardCardClick"
           @contextmenu.prevent="onCardCtx(todo, $event)"
@@ -469,6 +473,13 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
                 {{ PRIORITY_META[todo.priority].label }}
               </span>
               <span
+                v-if="todo.processed"
+                class="text-[9px] font-mono px-1.5 py-px rounded-md border"
+                :class="todo.closed_reason === 'cancelled' ? 'bg-amber-500/15 text-amber-300 border-amber-400/30' : 'bg-emerald-500/15 text-emerald-300 border-emerald-400/30'"
+              >
+                {{ todo.closed_reason === 'cancelled' ? '已取消' : '已完成' }}
+              </span>
+              <span
                 v-if="todo.recurring"
                 class="text-[9px] font-mono px-1.5 py-px rounded-md border bg-indigo-500/15 text-indigo-300 border-indigo-400/30"
               >
@@ -483,13 +494,12 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
                 <Icon name="calendar" :size="10" />
                 {{ dueStatus(todo).label }}
               </span>
-              <span v-if="todo.need_remind && todo.remind_time" class="text-slate-500">
+              <span v-if="todo.remind_time" class="text-slate-500">
                 提醒 {{ formatDate(todo.remind_time) }}
               </span>
-              <span v-if="!todo.need_remind" class="text-slate-600">免提醒</span>
-              <span v-if="todo.push_enabled && todo.push_at" class="flex items-center gap-1 text-sky-400/90">
+              <span v-if="todo.mqtt_enabled && todo.mqtt_at" class="flex items-center gap-1 text-sky-400/90">
                 <Icon name="share" :size="10" />
-                MQTT {{ formatPush(todo.push_at) }}
+                MQTT {{ formatPush(todo.mqtt_at) }}
               </span>
               <span v-if="todo.last_completed_date" class="text-emerald-500/80">
                 上次 {{ formatDate(todo.last_completed_date) }}
@@ -517,7 +527,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
               重开
             </button>
             <button
-              v-if="!todo.processed && todo.need_remind"
+              v-if="!todo.processed && todo.due_time"
               class="flex items-center gap-0.5 px-1.5 py-0.5 rounded-lg text-[10px] font-mono text-slate-300 bg-white/5 hover:bg-amber-500/20 hover:text-amber-300 border border-white/10 transition"
               title="推迟一个周期"
               @click.stop="snooze(todo)"
@@ -542,93 +552,74 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <textarea v-model="form.content" :class="inputClass" rows="2" placeholder="主卧电表，户号 123456" />
         </div>
 
-        <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
+        <div class="grid grid-cols-2 gap-2.5">
           <div>
-            <div class="text-slate-200">开启到期提醒</div>
-            <div class="text-[10px] text-slate-500 mt-0.5">关闭后只保留标题内容，不参与日历与逾期统计</div>
+            <label :class="labelClass">到期日期</label>
+            <input v-model="form.due_time" type="date" :class="inputClass" />
+          </div>
+          <div>
+            <label :class="labelClass">提醒日期</label>
+            <input v-model="form.remind_time" type="date" :class="inputClass" />
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-2.5">
+          <div>
+            <label :class="labelClass">优先级</label>
+            <select v-model.number="form.priority" :class="inputClass">
+              <option v-for="opt in PRIORITY_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+          <div>
+            <label :class="labelClass">循环</label>
+            <select v-model="form.cycle_mode" :class="inputClass">
+              <option v-for="opt in CYCLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
+            </select>
+          </div>
+        </div>
+
+        <div v-if="form.cycle_mode === 'days'">
+          <label :class="labelClass">循环间隔（天）</label>
+          <input v-model.number="form.cycle_days" type="number" min="1" :class="inputClass" />
+        </div>
+
+        <div v-if="form.cycle_mode" class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
+          <div>
+            <div class="text-slate-200">逾期逐期补做</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">关闭则跳过已错过的周期，直接顺延到未来</div>
           </div>
           <button
             class="relative w-9 h-5 rounded-full transition flex-shrink-0"
-            :class="form.need_remind ? 'bg-sky-500' : 'bg-slate-700'"
-            @click="form.need_remind = !form.need_remind"
+            :class="form.catch_up ? 'bg-sky-500' : 'bg-slate-700'"
+            @click="form.catch_up = !form.catch_up"
           >
             <span
               class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-              :class="form.need_remind ? 'translate-x-4' : ''"
+              :class="form.catch_up ? 'translate-x-4' : ''"
             />
           </button>
         </div>
-
-        <template v-if="form.need_remind">
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label :class="labelClass">到期日</label>
-              <input v-model="form.due_time" type="date" :class="inputClass" />
-            </div>
-            <div>
-              <label :class="labelClass">提前提醒（天）</label>
-              <input v-model.number="form.advance_days" type="number" min="0" :class="inputClass" />
-            </div>
-          </div>
-
-          <div class="grid grid-cols-2 gap-2.5">
-            <div>
-              <label :class="labelClass">优先级</label>
-              <select v-model.number="form.priority" :class="inputClass">
-                <option v-for="opt in PRIORITY_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              </select>
-            </div>
-            <div>
-              <label :class="labelClass">循环</label>
-              <select v-model="form.cycle_mode" :class="inputClass">
-                <option v-for="opt in CYCLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
-              </select>
-            </div>
-          </div>
-
-          <div v-if="form.cycle_mode === 'days'">
-            <label :class="labelClass">循环间隔（天）</label>
-            <input v-model.number="form.cycle_days" type="number" min="1" :class="inputClass" />
-          </div>
-
-          <div v-if="form.cycle_mode" class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
-            <div>
-              <div class="text-slate-200">逾期逐期补做</div>
-              <div class="text-[10px] text-slate-500 mt-0.5">关闭则跳过已错过的周期，直接顺延到未来</div>
-            </div>
-            <button
-              class="relative w-9 h-5 rounded-full transition flex-shrink-0"
-              :class="form.catch_up ? 'bg-sky-500' : 'bg-slate-700'"
-              @click="form.catch_up = !form.catch_up"
-            >
-              <span
-                class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-                :class="form.catch_up ? 'translate-x-4' : ''"
-              />
-            </button>
-          </div>
-        </template>
 
         <div class="flex items-center justify-between p-2.5 rounded-xl bg-white/5 border border-white/10">
           <div>
             <div class="text-slate-200">MQTT 消息提醒</div>
-            <div class="text-[10px] text-slate-500 mt-0.5">到点后经 push-server 推送到 MQTT，与到期提醒相互独立</div>
+            <div class="text-[10px] text-slate-500 mt-0.5">勾选后选择具体的 MQTT 推送日期和时间</div>
           </div>
           <button
             class="relative w-9 h-5 rounded-full transition flex-shrink-0"
-            :class="form.push_enabled ? 'bg-sky-500' : 'bg-slate-700'"
-            @click="form.push_enabled = !form.push_enabled"
+            :class="form.mqtt_enabled ? 'bg-sky-500' : 'bg-slate-700'"
+            @click="toggleMqtt"
           >
             <span
               class="absolute top-0.5 left-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-              :class="form.push_enabled ? 'translate-x-4' : ''"
+              :class="form.mqtt_enabled ? 'translate-x-4' : ''"
             />
           </button>
         </div>
 
-        <div v-if="form.push_enabled">
-          <label :class="labelClass">推送时间（北京时间）</label>
-          <PushTimePicker v-model="form.push_at" />
+        <div v-if="form.mqtt_enabled">
+          <label :class="labelClass">MQTT 推送时间（北京时间）</label>
+          <PushTimePicker v-model="form.mqtt_at" />
         </div>
       </div>
 

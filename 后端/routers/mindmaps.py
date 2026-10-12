@@ -55,6 +55,8 @@ def update_mindmap(
 
     if "title" in payload:
         m.title = payload["title"]
+    if "tags" in payload:
+        m.tags = payload["tags"] or []
     if "outline" in payload:
         m.outline = payload["outline"] or ""
     m.updated_at = shanghai_now()

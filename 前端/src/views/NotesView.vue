@@ -25,6 +25,7 @@ const searchEl = ref(null)
 
 const selectedId = ref(null) // number | 'new' | null
 const draft = reactive({ title: '', content: '', tags: '' })
+const tagInput = ref('')
 const preview = ref(false)
 const saving = ref(false)
 
@@ -78,12 +79,38 @@ function openNote(note) {
   selectedId.value = note.id
   Object.assign(draft, { title: note.title, content: note.content || '', tags: (note.tags || []).join(', ') })
   preview.value = false
+  tagInput.value = ''
 }
 
 function startNew() {
   selectedId.value = 'new'
   Object.assign(draft, { title: '', content: '', tags: activeTag.value === 'ALL' ? '' : activeTag.value })
   preview.value = false
+  tagInput.value = ''
+}
+
+function addTag() {
+  const tag = tagInput.value.trim()
+  if (!tag) return
+  const tags = parseTags(draft.tags)
+  if (!tags.includes(tag)) tags.push(tag)
+  draft.tags = tags.join(', ')
+  tagInput.value = ''
+}
+
+function removeTag(tag) {
+  draft.tags = parseTags(draft.tags).filter((item) => item !== tag).join(', ')
+}
+
+function onTagKey(event) {
+  if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
+    event.preventDefault()
+    addTag()
+  }
+  if (event.key === 'Backspace' && !tagInput.value.trim() && draftTagList.value.length) {
+    const tags = draftTagList.value.slice(0, -1)
+    draft.tags = tags.join(', ')
+  }
 }
 
 function closeEditor() {
@@ -376,24 +403,20 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           placeholder="笔记标题"
         />
 
-        <div class="flex-shrink-0 flex items-center gap-2 px-4 sm:px-5 pb-3">
+        <div class="flex-shrink-0 flex flex-wrap items-center gap-1.5 px-4 sm:px-5 pb-3">
           <Icon name="tag" :size="13" class="text-slate-500 shrink-0" />
-          <input
-            v-model="draft.tags"
-            class="flex-1 min-w-0 bg-transparent text-[11px] text-slate-300 caret-violet-400 placeholder-slate-600 focus:outline-none selectable"
-            placeholder="添加标签，用逗号分隔（如：运维, 部署）"
-          />
-          <div v-if="draftTagList.length" class="flex items-center gap-1 shrink-0 max-w-[55%] overflow-hidden">
-            <span
-              v-for="t in draftTagList.slice(0, 3)"
-              :key="t"
-              class="text-[9px] px-1.5 py-px rounded-md border whitespace-nowrap"
-              :class="tagColor(t)"
-            >
-              {{ t }}
+          <template v-for="tag in draftTagList" :key="tag">
+            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-medium border" :class="tagColor(tag)">
+              {{ tag }}
+              <button type="button" class="hover:text-white" @click="removeTag(tag)">×</button>
             </span>
-            <span v-if="draftTagList.length > 3" class="text-[9px] text-slate-500 font-mono shrink-0">+{{ draftTagList.length - 3 }}</span>
-          </div>
+          </template>
+          <input
+            v-model="tagInput"
+            class="flex-1 min-w-[5rem] bg-transparent text-[11px] text-slate-300 caret-violet-400 placeholder-slate-600 focus:outline-none selectable"
+            placeholder="输入标签后回车"
+            @keydown="onTagKey"
+          />
         </div>
 
         <div class="flex-shrink-0 h-px bg-white/10" />
