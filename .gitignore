@@ -1,0 +1,15 @@
+# TaskOps runtime data and generated files
+后端/data/
+后端/backend.log
+后端/__pycache__/
+后端/routers/__pycache__/
+*.py[cod]
+
+# Frontend dependencies and build output
+前端/node_modules/
+前端/dist/
+
+# Local environment files
+.env
+.env.*
+!.env.example
