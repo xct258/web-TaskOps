@@ -10,6 +10,7 @@ import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { usePageMenu } from '@/composables/usePageMenu'
+import { formatPush, toPushInput, toPushISO } from '@/utils/pushTime'
 import {
   CYCLE_LABELS,
   CYCLE_OPTIONS,
@@ -190,20 +191,6 @@ function replace(updated) {
   loadSummary()
 }
 
-/** 后端 ISO 时间 → datetime-local 输入值（YYYY-MM-DDTHH:MM，兼容 +08:00 后缀）。 */
-function toLocalInput(v) {
-  if (!v) return ''
-  return String(v).replace(' ', 'T').slice(0, 16)
-}
-
-/** 推送时间展示：MM-DD HH:MM。 */
-function formatPush(v) {
-  const s = toLocalInput(v)
-  if (!s) return ''
-  const [d, t] = s.split('T')
-  return `${d.slice(5)} ${t}`
-}
-
 function openAdd() {
   editing.value = null
   Object.assign(form, {
@@ -235,7 +222,7 @@ function openEdit(todo) {
     cycle_days: todo.cycle_days || 7,
     catch_up: !!todo.catch_up,
     push_enabled: !!todo.push_enabled,
-    push_at: toLocalInput(todo.push_at),
+    push_at: toPushInput(todo.push_at),
   })
   modalOpen.value = true
 }
@@ -264,7 +251,11 @@ async function save() {
       toast.error('请先选择 MQTT 推送时间')
       return
     }
-    payload.push_at = form.push_at
+    payload.push_at = toPushISO(form.push_at)
+    if (!payload.push_at) {
+      toast.error('MQTT 推送时间格式无效')
+      return
+    }
   } else {
     payload.push_at = null
   }
@@ -635,7 +626,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         </div>
 
         <div v-if="form.push_enabled">
-          <label :class="labelClass">推送时间</label>
+          <label :class="labelClass">推送时间（北京时间）</label>
           <input v-model="form.push_at" type="datetime-local" :class="inputClass" />
         </div>
       </div>

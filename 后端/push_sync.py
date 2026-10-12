@@ -59,10 +59,8 @@ def _request(method: str, url: str, body: dict | None, token: str, timeout: int 
 
 
 def _to_iso(dt) -> str:
-    """排期转 ISO（naive 视为上海时间；push-server 侧会再归一化）。"""
-    if isinstance(dt, datetime) and dt.tzinfo is None:
-        dt = dt.replace(tzinfo=ZoneInfo("Asia/Shanghai"))
-    return dt.isoformat()
+    """排期转北京时间 ISO，投递与页面返回的时区口径一致。"""
+    return parse_push_at(dt).isoformat()
 
 
 def build_task_payload(todo, config: dict) -> dict:

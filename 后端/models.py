@@ -11,6 +11,7 @@ from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Column, JSON
+from pydantic import field_serializer
 from sqlmodel import Field, SQLModel
 
 
@@ -59,6 +60,16 @@ class Todo(SQLModel, table=True):
     undo_snapshot: Optional[Dict] = Field(default=None, sa_column=Column(JSON))
 
     created_at: date = Field(default_factory=date.today)
+
+    @field_serializer("push_at", when_used="json")
+    def serialize_push_at(self, value: Optional[datetime]) -> Optional[str]:
+        """SQLite 读取后无时区的排期仍是北京时间；接口始终返回明确的 +08:00。"""
+        if value is None:
+            return None
+        timezone = ZoneInfo("Asia/Shanghai")
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone)
+        return value.astimezone(timezone).isoformat()
 
 
 # 书签。tags 存 JSON 数组；PUT 支持逗号字符串自动转数组。

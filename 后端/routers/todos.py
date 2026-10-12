@@ -354,18 +354,36 @@ def snooze_todo(
 ):
     """行内推迟：循环任务顺延一个周期，一次性任务 +1 天（从 due/今天中较晚者起算）。
 
-    body 可带 callback_ref（幂等）与 push_at（回调回写的新排期，直接采用，不 upsert）；
+    body 可带 callback_ref（幂等）与 push_at（MQTT 回调只回写推送排期，不改到期/提醒日，不 upsert）；
     手动推迟+开推送：push_at 按 due 偏移平移并 upsert（先同步后 commit）。
     """
     r = session.get(Todo, rid)
     if not r:
         raise HTTPException(404, "Todo not found")
-    if not r.need_remind:
-        raise HTTPException(400, "only reminder todos can snooze")
-
     body = body or {}
     callback_ref = body.get("callback_ref")
     replay = bool(callback_ref and r.last_callback_ref == callback_ref)
+
+    # MQTT 提醒独立于到期提醒；对端已完成分钟级推迟，这里只回写排期。
+    if body.get("push_at"):
+        if not r.push_enabled:
+            raise HTTPException(400, "push reminder is disabled")
+        try:
+            push_at = parse_push_at(body["push_at"])
+        except ValueError:
+            raise HTTPException(status_code=400, detail="Invalid push_at format")
+        if not replay:
+            r.push_at = push_at
+            if callback_ref:
+                r.last_callback_ref = callback_ref
+            if body.get("note"):
+                logger.info(f"待办 #{r.id} 推迟备注：{body['note']}")
+        session.commit()
+        session.refresh(r)
+        return r
+
+    if not r.need_remind:
+        raise HTTPException(400, "only reminder todos can snooze")
 
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
     if not replay:
@@ -377,15 +395,7 @@ def snooze_todo(
         next_due = calc_next_due(r, anchor) if r.recurring else anchor + timedelta(days=1)
 
         if r.push_enabled:
-            if body.get("push_at"):
-                # 回调回写：采用对端新排期（note 仅日志，不存列）
-                try:
-                    r.push_at = parse_push_at(body["push_at"])
-                except ValueError:
-                    raise HTTPException(status_code=400, detail="Invalid push_at format")
-                if body.get("note"):
-                    logger.info(f"待办 #{r.id} 推迟备注：{body['note']}")
-            elif r.push_at and old_due and next_due:
+            if r.push_at and old_due and next_due:
                 # 手动推迟：推送时间按到期日偏移同步平移
                 try:
                     r.push_at = parse_push_at(r.push_at) + (next_due - old_due)
@@ -395,8 +405,8 @@ def snooze_todo(
         adv = r.advance_days or 0
         r.remind_time = next_due - timedelta(days=adv)
 
-    # 手动推迟才 upsert（回调方排期已是最新，不用回写）
-    if r.push_enabled and r.push_at and not body.get("push_at"):
+    # 手动推迟需同步新的推送排期。
+    if r.push_enabled and r.push_at:
         _sync_upsert_or_502(session, r)
 
     session.commit()
