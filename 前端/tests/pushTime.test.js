@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
+import { daysUntil, shiftDate } from '../src/utils/format.js'
 import {
   beijingTodayYMD,
   formatPush,
@@ -70,4 +71,11 @@ test('相对时间提示正确', () => {
   assert.equal(pushRelative('2026-10-13T21:30', now), '约1天1小时后')
   assert.equal(pushRelative('2026-10-12T19:00', now), '已过去')
   assert.equal(pushRelative('', now), '')
+})
+
+test('待办日期按北京时间和纯日期计算', () => {
+  assert.equal(shiftDate('2026-01-01', -1), '2025-12-31')
+  assert.equal(shiftDate('2026-02-28', 1), '2026-03-01')
+  assert.equal(shiftDate('2026-12-31', 1), '2027-01-01')
+  assert.equal(daysUntil('2026-10-12T00:00:00'), daysUntil('2026-10-12'))
 })
