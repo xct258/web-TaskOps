@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
+import PushTimePicker from '@/components/PushTimePicker.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -627,7 +628,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
 
         <div v-if="form.push_enabled">
           <label :class="labelClass">推送时间（北京时间）</label>
-          <input v-model="form.push_at" type="datetime-local" :class="inputClass" />
+          <PushTimePicker v-model="form.push_at" />
         </div>
       </div>
 

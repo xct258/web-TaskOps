@@ -1,6 +1,16 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { formatPush, toPushInput, toPushISO } from '../src/utils/pushTime.js'
+import {
+  beijingTodayYMD,
+  formatPush,
+  joinPushInput,
+  parsePushInput,
+  pushRelative,
+  shiftYMD,
+  toPushInput,
+  toPushISO,
+  ymdWeekday,
+} from '../src/utils/pushTime.js'
 
 test('新增、显示和再次编辑保持所选北京时间', () => {
   const selected = '2026-10-12T20:30'
@@ -30,4 +40,34 @@ test('空值和无效时间不生成错误排期', () => {
     assert.equal(toPushISO(value), '')
     assert.equal(formatPush(value), '')
   }
+})
+
+test('日期推算与周几和浏览器时区无关', () => {
+  assert.equal(shiftYMD('2026-10-12', 0), '2026-10-12')
+  assert.equal(shiftYMD('2026-10-12', 1), '2026-10-13')
+  assert.equal(shiftYMD('2026-10-13', -1), '2026-10-12')
+  assert.equal(shiftYMD('2026-12-31', 1), '2027-01-01')
+  assert.equal(ymdWeekday('2026-10-12'), '周一')
+  assert.equal(ymdWeekday('2026-10-13'), '周二')
+  assert.equal(ymdWeekday('2026-10-18'), '周日')
+  assert.equal(ymdWeekday('bad'), '')
+  assert.match(beijingTodayYMD(), /^\d{4}-\d{2}-\d{2}$/)
+})
+
+test('选择器值解析与拼接往返一致', () => {
+  assert.deepEqual(parsePushInput('2026-10-12T20:30'), { date: '2026-10-12', hour: '20', minute: '30' })
+  assert.deepEqual(parsePushInput('2026-10-12T20:30:00+08:00'), { date: '2026-10-12', hour: '20', minute: '30' })
+  assert.equal(parsePushInput('invalid'), null)
+  assert.equal(joinPushInput('2026-10-12', '20', '30'), '2026-10-12T20:30')
+  assert.equal(joinPushInput('bad', '20', '30'), '')
+})
+
+test('相对时间提示正确', () => {
+  // 2026-10-12T12:00:00Z == 北京时间 20:00
+  const now = Date.parse('2026-10-12T12:00:00Z')
+  assert.equal(pushRelative('2026-10-12T20:30', now), '约30分钟后')
+  assert.equal(pushRelative('2026-10-12T22:00', now), '约2小时后')
+  assert.equal(pushRelative('2026-10-13T21:30', now), '约1天1小时后')
+  assert.equal(pushRelative('2026-10-12T19:00', now), '已过去')
+  assert.equal(pushRelative('', now), '')
 })
