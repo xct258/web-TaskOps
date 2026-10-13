@@ -38,7 +38,7 @@ from sqlmodel import Session, select
 
 from db import get_todo_session
 from models import Todo
-from push_sync import PushSyncError, cancel_push_task, finish_push_task, parse_mqtt_at, upsert_push_task
+from push_sync import PushSyncError, cancel_push_task, parse_mqtt_at, upsert_push_task
 from utils import calc_next_due, calc_next_due_after, parse_due_date
 
 logger = logging.getLogger(__name__)
@@ -247,7 +247,7 @@ def mark_processed(
     """完成打卡；body 可带 callback_ref（push-server 回调幂等：重放只跳过推进，不跳过同步）。
 
     循环+开 MQTT：mqtt_at 按到期日变化同步平移并 upsert 建下一期（先同步后 commit）；
-    当前期结束同步 done/cancelled，失败返回 502；push-server 广播但不反向回调。
+    一次性+开推送：cancel 对端任务（best-effort，失败只记日志，不拦完成）。
     """
     r = session.get(Todo, rid)
     if not r:
@@ -260,20 +260,13 @@ def mark_processed(
         raise HTTPException(400, "action 只能是 done 或 cancelled")
     replay = bool(callback_ref and r.last_callback_ref == callback_ref)
 
-    if not replay and r.push_task_id:
-        try:
-            finish_push_task(r.push_task_id, action)
-        except PushSyncError as exc:
-            session.rollback()
-            raise HTTPException(502, str(exc))
-
     if not replay:
         r.undo_snapshot = _snapshot(r)  # 供 /undo 回滚
         r.last_completed_date = today
         if callback_ref:
             r.last_callback_ref = callback_ref
 
-        if r.recurring and action == "done":
+        if r.recurring:
             base_due = r.due_time or today
             old_due = r.due_time
             if r.catch_up:
@@ -297,9 +290,14 @@ def mark_processed(
             r.processed = True
             r.closed_reason = action
 
-    # 当前期已结束，循环完成时才创建下一期。
-    if r.mqtt_enabled and r.mqtt_at and not r.processed:
+    # 推送同步：循环建下一期（失败回滚+502）；一次性取消对端（best-effort）
+    if r.mqtt_enabled and r.mqtt_at and not (r.processed and not r.recurring):
         _sync_upsert_or_502(session, r)
+    elif not r.recurring and (r.push_task_id or r.mqtt_enabled):
+        try:
+            cancel_push_task(r.id)
+        except PushSyncError as e:
+            logger.error(f"待办 #{r.id} 完成但取消提醒失败（稍后幽灵推送将打空回调）：{e}")
 
     session.commit()
     session.refresh(r)
