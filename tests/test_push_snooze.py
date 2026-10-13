@@ -76,6 +76,22 @@ class ReminderTests(unittest.TestCase):
         self.assertTrue(cancelled.processed)
         self.assertEqual(cancelled.closed_reason, "cancelled")
 
+    def test_page_done_syncs_done_instead_of_cancel(self):
+        todo = self.make_todo()
+        with patch.object(todos, "finish_push_task") as finish, patch.object(todos, "cancel_push_task") as cancel:
+            result = todos.mark_processed(todo.id, {"action": "done"}, self.session)
+            finish.assert_called_once_with(7, "done")
+            cancel.assert_not_called()
+            self.assertEqual(result.closed_reason, "done")
+
+    def test_recurring_done_ends_old_period_and_registers_next(self):
+        todo = self.make_todo(recurring=True, cycle_mode="weekly", due_time=date(2099, 10, 15))
+        with patch.object(todos, "finish_push_task") as finish:
+            todos.mark_processed(todo.id, {"action": "done"}, self.session)
+            finish.assert_called_once_with(7, "done")
+            self.upsert.assert_called_once()
+            self.assertFalse(todo.processed)
+
     def test_invalid_mqtt_callback_does_not_change_schedule(self):
         todo = self.make_todo()
         previous = todo.mqtt_at

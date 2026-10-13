@@ -112,6 +112,13 @@ def cancel_push_task(todo_id: int, config: dict | None = None) -> int:
     return n
 
 
+def finish_push_task(task_id: int, status: str, config: dict | None = None) -> None:
+    """同步当前期的完成/取消状态，push-server 广播但不反向回调。"""
+    config = config or get_push_sync_config()
+    _request("PUT", f"{config['base_url']}/api/task/{task_id}/state",
+             {"status": status}, config["token"])
+
+
 def parse_mqtt_at(raw) -> datetime:
     """MQTT 推送时间统一解析（无时区按上海；结果一律上海 aware）。
 
