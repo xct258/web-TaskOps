@@ -63,6 +63,7 @@ const pendingDelete = ref(null)
 const tree = ref(null)
 const editingUid = ref(null)
 const editingText = ref('')
+const editingContent = ref('')
 const editInputEl = ref(null)
 
 const draft = reactive({ title: '', tags: '', outline: '' })
@@ -145,13 +146,6 @@ const transformStyle = computed(() => ({
   transformOrigin: '0 0',
 }))
 
-function excerpt(text) {
-  return String(text || '')
-    .replace(/\s+/g, ' ')
-    .trim()
-    .slice(0, 80)
-}
-
 async function load() {
   loading.value = true
   try {
@@ -199,10 +193,11 @@ function openMap(map) {
 function startNew() {
   selectedId.value = 'new'
   Object.assign(draft, { title: '新建导图', tags: activeTag.value === 'ALL' ? '' : activeTag.value, outline: DEFAULT_OUTLINE })
-  mode.value = 'edit'
+  mode.value = 'graph'
   resetInteraction()
   rebuildTree()
   tagInput.value = ''
+  nextTick(() => fitView())
 }
 
 function addTag() {
@@ -324,17 +319,17 @@ function startEditNode(uid) {
   selectedUid.value = uid
   editingUid.value = uid
   editingText.value = node.text
-  nextTick(() => {
-    editInputEl.value?.focus()
-    editInputEl.value?.select()
-  })
+  editingContent.value = node.content || ''
 }
 
 function commitEdit() {
   const uid = editingUid.value
   if (uid == null) return
   const node = nodeByUid(uid)
-  if (node) node.text = editingText.value.trim() || '新节点'
+  if (node) {
+    node.text = editingText.value.trim() || '新节点'
+    node.content = editingContent.value
+  }
   editingUid.value = null
   commitTree()
 }
@@ -357,7 +352,7 @@ function onEditKeydown(e) {
 function addChild(uid) {
   const node = nodeByUid(uid)
   if (!node) return
-  const child = { uid: newUid(), text: '新节点', children: [] }
+  const child = { uid: newUid(), text: '新节点', content: '', children: [] }
   node.children.push(child)
   commitTree()
   nextTick(() => {
@@ -373,7 +368,7 @@ function addSibling(uid) {
     return
   }
   const index = found.parent.children.indexOf(found.node)
-  const sibling = { uid: newUid(), text: '新节点', children: [] }
+  const sibling = { uid: newUid(), text: '新节点', content: '', children: [] }
   found.parent.children.splice(index + 1, 0, sibling)
   commitTree()
   nextTick(() => {
@@ -823,7 +818,7 @@ onBeforeUnmount(() => {
           <button
             v-for="map in visible"
             :key="map.id"
-            class="group flex flex-col text-left rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 hover:border-rose-400/40 hover:bg-slate-900/80 transition overflow-hidden"
+            class="group relative flex flex-col text-left rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 hover:border-rose-400/40 hover:bg-slate-900/80 transition overflow-hidden"
             @click="onCardClick(map)"
             @contextmenu.prevent="onCardCtx(map, $event)"
             @touchstart.passive="onCardPressStart(map, $event)"
@@ -860,14 +855,26 @@ onBeforeUnmount(() => {
                   stroke-width="1"
                   vector-effect="non-scaling-stroke"
                 />
+                <text
+                  v-for="node in thumbs[map.id].nodes"
+                  :key="`t${node.id}`"
+                  :x="node.x + node.width / 2"
+                  :y="node.y + node.height / 2"
+                  :fill="toneForDepth(node.depth).text"
+                  font-size="8"
+                  font-family="system-ui, sans-serif"
+                  text-anchor="middle"
+                  dominant-baseline="middle"
+                >
+                  {{ node.lines?.[0] || node.text || '（空）' }}
+                </text>
               </svg>
             </div>
             <div class="p-3">
-              <div class="flex items-center justify-between gap-2">
+              <div class="flex items-center gap-2 pr-16">
                 <span class="text-xs font-semibold text-slate-100 truncate">{{ map.title }}</span>
-                <span class="text-[9px] text-slate-500 font-mono shrink-0">{{ relativeTime(map.updated_at) }}</span>
               </div>
-              <p class="text-[10px] text-slate-400 mt-1 line-clamp-2">{{ excerpt(map.outline) || '（空大纲）' }}</p>
+              <span class="absolute top-[108px] right-3 text-[9px] text-slate-500 font-mono">{{ relativeTime(map.updated_at) }}</span>
               <div v-if="(map.tags || []).length" class="flex items-center gap-1 mt-2 flex-wrap">
                 <span v-for="tag in map.tags.slice(0, 4)" :key="tag" class="text-[9px] px-1.5 py-px rounded-md border" :class="tagColor(tag)">{{ tag }}</span>
               </div>
@@ -891,15 +898,6 @@ onBeforeUnmount(() => {
           {{ selectedId === 'new' ? '新建导图' : '编辑导图' }}
         </span>
         <div class="flex-1" />
-        <button
-          class="p-1.5 rounded-xl border transition"
-          :class="mode === 'edit' ? 'bg-rose-600/80 text-white border-rose-400/30' : 'bg-white/5 text-slate-300 border-white/10 hover:bg-white/10'"
-          :title="mode === 'edit' ? '查看导图' : '文本大纲'"
-          @click="toggleMode"
-        >
-          <Icon :name="mode === 'edit' ? 'mindmap' : 'edit'" :size="15" />
-        </button>
-
         <button
           class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-rose-600/80 hover:bg-rose-600 disabled:opacity-60 text-white text-xs font-mono border border-rose-400/30 transition"
           :disabled="saving"
@@ -943,17 +941,8 @@ onBeforeUnmount(() => {
 
         <div class="flex-shrink-0 h-px bg-white/10" />
 
-        <!-- 编辑：大纲文本 -->
-        <textarea
-        v-if="mode === 'edit'"
-        v-model="draft.outline"
-        class="flex-1 min-h-0 w-full resize-none bg-transparent px-4 sm:px-5 py-4 text-xs text-slate-200 font-mono leading-relaxed focus:outline-none selectable custom-scroll"
-        placeholder="每行一个节点，用缩进表示层级：&#10;中心主题&#10;  分支一&#10;    叶子&#10;  分支二"
-        />
-
         <!-- 预览 / 内联编辑：可平移缩放的导图画布 -->
         <div
-        v-else
         ref="canvasEl"
         class="flex-1 min-h-0 relative overflow-hidden select-none"
         :class="panning ? 'cursor-grabbing' : 'cursor-grab'"
@@ -1000,25 +989,12 @@ onBeforeUnmount(() => {
               @touchend="onPressEnd"
               @touchcancel="onPressEnd"
             >
-              <input
-                v-if="editingUid === node.uid"
-                :ref="setEditInput"
-                v-model="editingText"
-                class="w-full bg-transparent px-1 text-center focus:outline-none"
-                :style="{ fontSize: '11px' }"
-                @keydown="onEditKeydown"
-                @blur="commitEdit"
-                @pointerdown.stop
-                @click.stop
-              />
-              <template v-else>
-                <span
-                  v-for="(line, i) in node.lines"
-                  :key="i"
-                  class="block px-1 whitespace-nowrap"
-                  :style="{ fontSize: '11px', lineHeight: `${layout.lineHeight}px` }"
-                >{{ line }}</span>
-              </template>
+              <span
+                v-for="(line, i) in node.lines"
+                :key="i"
+                class="block px-1 whitespace-nowrap"
+                :style="{ fontSize: '11px', lineHeight: `${layout.lineHeight}px` }"
+              >{{ line }}</span>
             </div>
           </div>
         </div>
@@ -1100,6 +1076,30 @@ onBeforeUnmount(() => {
         <span class="hidden sm:block text-[10px] text-slate-600 font-mono">右键 / 长按节点操作 · 双击编辑 · Tab 子节点 · Enter 编辑 · Delete 删除</span>
       </div>
     </template>
+
+    <div v-if="editingUid != null" class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm" @click.self="cancelEdit">
+      <section class="w-full max-w-md rounded-2xl bg-slate-900 border border-white/15 shadow-2xl p-4 space-y-3">
+        <div class="flex items-center justify-between">
+          <div>
+            <div class="text-sm font-semibold text-slate-100">编辑节点</div>
+            <div class="text-[10px] text-slate-500">画布只显示标题，详细内容保存在节点中</div>
+          </div>
+          <button type="button" class="p-1.5 rounded-lg text-slate-400 hover:bg-white/10" @click="cancelEdit">×</button>
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-1">标题</label>
+          <input v-model="editingText" class="w-full px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-sm text-white focus:outline-none focus:border-rose-400" @keydown.enter.prevent="commitEdit" />
+        </div>
+        <div>
+          <label class="block text-[11px] text-slate-400 mb-1">内容</label>
+          <textarea v-model="editingContent" rows="6" class="w-full resize-y px-3 py-2 rounded-xl bg-slate-950 border border-white/10 text-xs leading-relaxed text-slate-200 focus:outline-none focus:border-rose-400" placeholder="输入节点详细内容" />
+        </div>
+        <div class="flex justify-end gap-2 text-xs">
+          <button type="button" class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-slate-300" @click="cancelEdit">取消</button>
+          <button type="button" class="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white" @click="commitEdit">保存节点</button>
+        </div>
+      </section>
+    </div>
 
     <!-- 节点 / 卡片操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
 

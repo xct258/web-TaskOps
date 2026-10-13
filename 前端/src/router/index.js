@@ -2,6 +2,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 
 import BookmarksView from '@/views/BookmarksView.vue'
 import LedgerView from '@/views/LedgerView.vue'
+import InventoryView from '@/views/InventoryView.vue'
 import MindmapView from '@/views/MindmapView.vue'
 import NotesView from '@/views/NotesView.vue'
 import ServerView from '@/views/ServerView.vue'
@@ -13,6 +14,7 @@ export const NAV_ITEMS = [
   { name: 'todos', path: '/todos', title: '待办', icon: 'list', accent: 'sky' },
   { name: 'server', path: '/server', title: '服务', icon: 'server', accent: 'emerald' },
   { name: 'ledger', path: '/ledger', title: '账本', icon: 'wallet', accent: 'amber' },
+  { name: 'inventory', path: '/inventory', title: '库存', icon: 'database', accent: 'teal' },
   { name: 'notes', path: '/notes', title: '笔记', icon: 'note', accent: 'violet' },
   { name: 'mindmaps', path: '/mindmaps', title: '导图', icon: 'mindmap', accent: 'rose' },
 ]
@@ -26,6 +28,7 @@ const router = createRouter({
     { path: '/todos', name: 'todos', component: TodosView },
     { path: '/server', name: 'server', component: ServerView },
     { path: '/ledger', name: 'ledger', component: LedgerView },
+    { path: '/inventory', name: 'inventory', component: InventoryView },
     { path: '/notes', name: 'notes', component: NotesView },
     { path: '/mindmaps', name: 'mindmaps', component: MindmapView },
     { path: '/:pathMatch(.*)*', redirect: '/bookmarks' },

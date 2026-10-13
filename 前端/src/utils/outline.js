@@ -58,13 +58,26 @@ function indentWidth(line) {
 
 /** 解析缩进大纲为节点树（合成一个空文本根节点）。 */
 export function parseOutline(text) {
+  try {
+    const parsed = JSON.parse(String(text || ''))
+    if (parsed && typeof parsed === 'object' && Array.isArray(parsed.children)) {
+      const normalize = (node) => ({
+        text: String(node.title ?? node.text ?? ''),
+        content: String(node.content || ''),
+        children: Array.isArray(node.children) ? node.children.map(normalize) : [],
+      })
+      return normalize(parsed)
+    }
+  } catch (_) {
+    // 普通缩进大纲继续按文本解析。
+  }
   const root = { text: '', children: [], indent: -1 }
   const stack = [root]
 
   for (const raw of String(text || '').replace(/\r\n?/g, '\n').split('\n')) {
     if (!raw.trim()) continue
     const indent = indentWidth(raw)
-    const node = { text: raw.trim(), children: [], indent }
+    const node = { text: raw.trim(), content: '', children: [], indent }
     while (stack.length > 1 && stack[stack.length - 1].indent >= indent) stack.pop()
     stack[stack.length - 1].children.push(node)
     stack.push(node)
@@ -125,6 +138,7 @@ function buildRecords(root) {
       id,
       uid: node.uid ?? id,
       text: node.text || '',
+      content: node.content || '',
       lines,
       depth,
       parent,
@@ -379,7 +393,12 @@ export function newUid() {
 }
 
 function withUid(node) {
-  return { uid: newUid(), text: node.text || '', children: (node.children || []).map(withUid) }
+  return {
+    uid: newUid(),
+    text: node.text || '',
+    content: node.content || '',
+    children: (node.children || []).map(withUid),
+  }
 }
 
 /** 大纲文本 -> 可编辑树（含根节点归并，节点带 uid）。 */
@@ -396,13 +415,14 @@ export function treeFromOutline(outline, title = '') {
 
 /** 可编辑树 -> 缩进大纲文本。 */
 export function outlineFromTree(root) {
-  const lines = []
-  function walk(node, depth) {
-    lines.push(`${'  '.repeat(depth)}${String(node.text || '').trim()}`)
-    for (const child of node.children) walk(child, depth + 1)
+  function clean(node) {
+    return {
+      title: String(node.text || '').trim() || '新节点',
+      content: String(node.content || ''),
+      children: (node.children || []).map(clean),
+    }
   }
-  if (root) walk(root, 0)
-  return lines.join('\n')
+  return root ? JSON.stringify(clean(root)) : ''
 }
 
 /** 直接对可编辑树做布局。 */
@@ -421,4 +441,3 @@ export function findNode(root, uid, parent = null) {
   }
   return null
 }
-

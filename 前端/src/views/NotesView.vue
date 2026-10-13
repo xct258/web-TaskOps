@@ -324,7 +324,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <button
             v-for="note in visible"
             :key="note.id"
-            class="group flex flex-col text-left rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 hover:border-violet-400/40 hover:bg-slate-900/80 transition p-3 min-h-[7.5rem]"
+            class="group relative flex flex-col text-left rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 hover:border-violet-400/40 hover:bg-slate-900/80 transition p-3 min-h-[7.5rem]"
             @click="onNoteCardClick(note)"
             @contextmenu.prevent="onNoteCtx(note, $event)"
             @touchstart.passive="onNotePressStart(note, $event)"
@@ -332,10 +332,10 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
             @touchend="onNotePressEnd"
             @touchcancel="onNotePressEnd"
           >
-            <div class="flex items-center justify-between gap-2">
+            <div class="flex items-center gap-2 pr-16">
               <span class="text-xs font-semibold text-slate-100 truncate">{{ note.title }}</span>
-              <span class="text-[9px] text-slate-500 font-mono shrink-0">{{ relativeTime(note.updated_at) }}</span>
             </div>
+            <span class="absolute top-3 right-3 text-[9px] text-slate-500 font-mono">{{ relativeTime(note.updated_at) }}</span>
             <p class="text-[10px] text-slate-400 mt-1.5 line-clamp-3 flex-1">{{ excerpt(note.content) || '（空笔记）' }}</p>
             <div v-if="(note.tags || []).length" class="flex items-center gap-1 mt-2 flex-wrap">
               <span

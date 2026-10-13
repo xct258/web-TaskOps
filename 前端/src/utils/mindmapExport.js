@@ -37,7 +37,9 @@ function edgeColor(branch) {
 /** 把布局数据转成独立 SVG 字符串。 */
 export function layoutToSvg(layout) {
   const width = layout.width + PADDING * 2
-  const height = layout.height + PADDING * 2
+  const contentRows = layout.nodes.filter((node) => String(node.content || '').trim())
+  const contentHeight = contentRows.length ? 32 + contentRows.reduce((sum, node) => sum + String(node.content).split(/\r?\n/).length * 18 + 24, 0) : 0
+  const height = layout.height + PADDING * 2 + contentHeight
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" width="${width}" height="${height}" viewBox="0 0 ${width} ${height}">`,
     `<rect width="${width}" height="${height}" fill="${BG}"/>`,
@@ -66,7 +68,26 @@ export function layoutToSvg(layout) {
     })
   }
 
-  parts.push('</g></svg>')
+  parts.push('</g>')
+
+  if (contentRows.length) {
+    let y = layout.height + PADDING + 24
+    parts.push(`<g transform="translate(${PADDING},${y})">`)
+    parts.push(`<text x="0" y="0" fill="#cbd5e1" font-size="${FONT_SIZE + 1}" font-family='${FONT_FAMILY}' font-weight="600">节点内容</text>`)
+    y = 24
+    for (const node of contentRows) {
+      parts.push(`<text x="0" y="${y}" fill="#f8fafc" font-size="${FONT_SIZE}" font-family='${FONT_FAMILY}' font-weight="600">${escapeXml(node.text || '未命名节点')}</text>`)
+      y += 18
+      for (const line of String(node.content).split(/\r?\n/)) {
+        parts.push(`<text x="12" y="${y}" fill="#cbd5e1" font-size="${FONT_SIZE}" font-family='${FONT_FAMILY}'>${escapeXml(line)}</text>`)
+        y += 18
+      }
+      y += 6
+    }
+    parts.push('</g>')
+  }
+
+  parts.push('</svg>')
   return parts.join('')
 }
 

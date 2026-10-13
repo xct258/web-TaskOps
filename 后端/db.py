@@ -2,18 +2,16 @@
 
 说明：
 - 每个业务域独占一个 SQLite 文件，都放在 ``data/`` 下（目录不存在自动创建）。
-- 为兼容旧逻辑，会话获取失败（表不存在）时自动建表后重试一次。
+ - 启动时按当前模型创建各业务表。
 - 调试：库文件可直接用 ``sqlite3 data/todos.db ".tables"`` 查看。
 
     $ sqlite3 data/ledger.db "select id,item,amount from ledger_items limit 5;"
 """
 from pathlib import Path
 
-from sqlalchemy import inspect
-from sqlalchemy.exc import OperationalError
 from sqlmodel import Session, SQLModel, create_engine
 
-from models import Asset, Bookmark, Ledger, Liability, MindMap, Note, Todo, ServerStatus
+from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Liability, MindMap, Note, Todo, ServerStatus
 
 # ---------------------------------------------------------------------------
 # 路径：以本文件所在目录为基准，data/ 与代码同级
@@ -32,6 +30,7 @@ DATABASE_URLS = {
     "ledger": f"sqlite:///{DATA_DIR / 'ledger.db'}",
     "note": f"sqlite:///{DATA_DIR / 'notes.db'}",
     "mindmap": f"sqlite:///{DATA_DIR / 'mindmaps.db'}",
+    "inventory": f"sqlite:///{DATA_DIR / 'inventory.db'}",
 }
 
 # 每个文件一个引擎；SQLite 单线程校验关掉以支持多线程 serve
@@ -47,6 +46,7 @@ server_status_engine = ENGINES["server_status"]
 ledger_engine = ENGINES["ledger"]
 note_engine = ENGINES["note"]
 mindmap_engine = ENGINES["mindmap"]
+inventory_engine = ENGINES["inventory"]
 
 
 def make_session_getter(engine, *tables, name="session"):
@@ -63,14 +63,8 @@ def make_session_getter(engine, *tables, name="session"):
     """
 
     def _getter():
-        try:
-            with Session(engine) as session:
-                yield session
-        except OperationalError:
-            # 表还没建（首次启动/库文件被删），建表后重试一次
-            SQLModel.metadata.create_all(engine, tables=list(tables))
-            with Session(engine) as session:
-                yield session
+        with Session(engine) as session:
+            yield session
 
     _getter.__name__ = f"get_{name}_session"
     return _getter
@@ -78,8 +72,6 @@ def make_session_getter(engine, *tables, name="session"):
 
 def init_db() -> None:
     """建全库表；开发阶段检测到旧待办结构时重建待办表。"""
-    _reset_legacy_todo_table()
-    _reset_legacy_mindmap_table()
     SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__])
     SQLModel.metadata.create_all(bookmark_engine, tables=[Bookmark.__table__])
     SQLModel.metadata.create_all(
@@ -91,25 +83,7 @@ def init_db() -> None:
     )
     SQLModel.metadata.create_all(note_engine, tables=[Note.__table__])
     SQLModel.metadata.create_all(mindmap_engine, tables=[MindMap.__table__])
-
-
-def _reset_legacy_todo_table() -> None:
-    """项目开发阶段切换待办模型时清理旧表，避免旧列导致 API 500。"""
-    inspector = inspect(todo_engine)
-    if not inspector.has_table("todo"):
-        return
-    columns = {column["name"] for column in inspector.get_columns("todo")}
-    if "mqtt_enabled" not in columns or "mqtt_at" not in columns or "closed_reason" not in columns:
-        Todo.__table__.drop(todo_engine, checkfirst=True)
-
-
-def _reset_legacy_mindmap_table() -> None:
-    """导图结构新增标签字段时，开发阶段重建旧表。"""
-    inspector = inspect(mindmap_engine)
-    if inspector.has_table("mindmap"):
-        columns = {column["name"] for column in inspector.get_columns("mindmap")}
-        if "tags" not in columns:
-            MindMap.__table__.drop(mindmap_engine, checkfirst=True)
+    SQLModel.metadata.create_all(inventory_engine, tables=[InventoryItem.__table__, InventoryMovement.__table__])
 
 
 # ---------------------------------------------------------------------------
@@ -133,4 +107,7 @@ get_note_session = make_session_getter(
 )
 get_mindmap_session = make_session_getter(
     mindmap_engine, MindMap.__table__, name="mindmap"
+)
+get_inventory_session = make_session_getter(
+    inventory_engine, InventoryItem.__table__, InventoryMovement.__table__, name="inventory"
 )

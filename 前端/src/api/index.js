@@ -112,6 +112,14 @@ export const api = {
     update: (id, data) => request(`/mindmaps/${id}`, { method: 'PUT', body: clean(data) }),
     remove: (id) => request(`/mindmaps/${id}`, { method: 'DELETE' }),
   },
+  inventory: {
+    list: (params = {}) => request(`/inventory${params.q || params.category ? `?${new URLSearchParams(Object.entries(params).filter(([, value]) => value))}` : ''}`),
+    create: (data) => request('/inventory', { method: 'POST', body: clean(data) }),
+    update: (id, data) => request(`/inventory/${id}`, { method: 'PUT', body: clean(data) }),
+    remove: (id) => request(`/inventory/${id}`, { method: 'DELETE' }),
+    movements: (id) => request(`/inventory/${id}/movements`),
+    move: (id, data) => request(`/inventory/${id}/movements`, { method: 'POST', body: clean(data) }),
+  },
 }
 
 export { ApiError }

@@ -37,6 +37,7 @@ const ACTIVE = {
   amber: 'bg-amber-600 text-white border-amber-400/40',
   violet: 'bg-violet-600 text-white border-violet-400/40',
   rose: 'bg-rose-600 text-white border-rose-400/40',
+  teal: 'bg-teal-600 text-white border-teal-400/40',
 }
 
 onMounted(() => {

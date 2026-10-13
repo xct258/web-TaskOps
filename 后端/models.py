@@ -160,3 +160,28 @@ class MindMap(SQLModel, table=True):
 
     created_at: date = Field(default_factory=date.today)
     updated_at: datetime = Field(default_factory=shanghai_now)
+
+
+class InventoryItem(SQLModel, table=True):
+    """家庭库存物品。"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    name: str
+    quantity: float = Field(default=0.0)
+    unit: str = Field(default="件")
+    location: Optional[str] = Field(default=None)
+    tags: List[str] = Field(default_factory=list, sa_column=Column(JSON))
+    note: Optional[str] = Field(default=None)
+    created_at: date = Field(default_factory=date.today)
+    updated_at: datetime = Field(default_factory=shanghai_now)
+
+
+class InventoryMovement(SQLModel, table=True):
+    """库存数量变动记录。"""
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    item_id: int = Field(index=True)
+    quantity_delta: float
+    reason: str = Field(default="调整")
+    note: Optional[str] = Field(default=None)
+    created_at: datetime = Field(default_factory=shanghai_now)

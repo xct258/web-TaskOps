@@ -6,7 +6,7 @@
     ├── main.py            ← 本文件：组装 + 启动（uvicorn main:app）
     ├── db.py              ← 引擎、会话工厂、建表
     ├── models.py          ← 8 张表结构
-    ├── utils.py           ← 日期/周期/资金/迁移纯函数
+    ├── utils.py           ← 日期/周期/资金纯函数
     └── routers/           ← todos / bookmarks / server / ledger / notes / mindmaps
 
 启动（在本目录执行）::
@@ -24,14 +24,14 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from db import init_db
-from routers import bookmarks, ledger, mindmaps, notes, todos, server
+from routers import bookmarks, inventory, ledger, mindmaps, notes, todos, server
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """启动时建表；关闭时无需清理（SQLite 无连接池可关）。
 
-    约定：测试阶段不做任何数据迁移，改表直接删 data/ 下对应 .db 重启重建。
+    约定：开发阶段改表直接删 data/ 下对应 .db 重启重建。
     """
     init_db()
     yield
@@ -60,6 +60,7 @@ app.include_router(server.router, prefix="/api")
 app.include_router(ledger.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
 app.include_router(mindmaps.router, prefix="/api")
+app.include_router(inventory.router, prefix="/api")
 
 
 @app.get("/docs", include_in_schema=False)
