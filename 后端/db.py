@@ -71,7 +71,7 @@ def make_session_getter(engine, *tables, name="session"):
 
 
 def init_db() -> None:
-    """建全库表；开发阶段检测到旧待办结构时重建待办表。"""
+    """根据当前模型创建各业务表。"""
     SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__])
     SQLModel.metadata.create_all(bookmark_engine, tables=[Bookmark.__table__])
     SQLModel.metadata.create_all(

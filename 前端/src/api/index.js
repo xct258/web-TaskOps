@@ -87,14 +87,16 @@ export const api = {
 
   /* ----------------------------- 账本 ----------------------------- */
   ledger: {
-    list: () => request('/ledger'),
+    list: (offset = 0) => request(`/ledger?offset=${offset}&limit=200`),
+    summary: () => request('/ledger/summary'),
+    loans: () => request('/ledger/loans'),
+    createPurchase: (data) => request('/ledger/financed-purchases', { method: 'POST', body: clean(data) }),
+    updatePurchase: (id, data) => request(`/ledger/financed-purchases/${id}`, { method: 'PUT', body: clean(data) }),
     create: (data) => request('/ledger', { method: 'POST', body: clean(data) }),
     update: (id, data) => request(`/ledger/${id}`, { method: 'PUT', body: clean(data) }),
     remove: (id) => request(`/ledger/${id}`, { method: 'DELETE' }),
     getAsset: () => request('/asset'),
-    setAsset: (amount) => request('/asset', { method: 'POST', body: { amount } }),
     getLiability: () => request('/liability'),
-    setLiability: (amount) => request('/liability', { method: 'POST', body: { amount } }),
   },
 
   /* ----------------------------- 笔记 ----------------------------- */

@@ -106,17 +106,21 @@ class Ledger(SQLModel, table=True):
     __tablename__ = "ledger_items"
 
     id: Optional[int] = Field(default=None, primary_key=True)
-    item: str
+    item: str = Field(default="")
     amount: float
     interest: float = Field(default=0.0)
     record_type: str = Field(default="expense")
+    loan_id: Optional[int] = Field(default=None, index=True)
+    purchase_id: Optional[str] = Field(default=None, index=True)
+    purchase_kind: Optional[str] = Field(default=None)
+    financing_source: Optional[str] = Field(default=None)
     record_date: date = Field(default_factory=date.today)
     category: Optional[str] = Field(default=None)
     notes: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=shanghai_now)
 
 
-# 资产总额，单行（id=1），由流水自动维护，也可 POST /asset 直接覆写。
+# 资金余额仅由流水维护。
 class Asset(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)

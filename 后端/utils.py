@@ -7,6 +7,7 @@
 """
 import calendar
 from datetime import date, datetime, timedelta
+from decimal import Decimal, ROUND_HALF_UP
 from typing import Tuple
 from zoneinfo import ZoneInfo
 
@@ -121,7 +122,7 @@ def calc_next_due_after(todo, base_date: date, today: date) -> date:
     return base_date + timedelta(days=step_days * k)
 
 
-def ledger_effect(record_type: str, amount: float, interest: float = 0.0) -> Tuple[float, float]:
+def ledger_effect(record_type: str, amount: float, interest: float = 0.0) -> Tuple[Decimal, Decimal]:
     """一笔流水对资产/负债的影响，返回 (asset_delta, liability_delta)。
 
     规则（与原逻辑逐行对过，保持一致）：
@@ -133,19 +134,19 @@ def ledger_effect(record_type: str, amount: float, interest: float = 0.0) -> Tup
     调试示例::
 
         $ python -c "from utils import ledger_effect; print(ledger_effect('debt_out', 100, 5))"
-        (-105.0, -100.0)
+        (Decimal('-105.00'), Decimal('-100.00'))
     """
-    amount = float(amount or 0.0)
-    interest = float(interest or 0.0)
+    amount = Decimal(str(amount or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
+    interest = Decimal(str(interest or 0)).quantize(Decimal('0.01'), rounding=ROUND_HALF_UP)
     if record_type == "income":
-        return (amount, 0.0)
+        return (amount, Decimal(0))
     elif record_type == "expense":
-        return (-amount, 0.0)
+        return (-amount, Decimal(0))
     elif record_type == "debt_in":
         return (amount, amount)
     elif record_type == "debt_out":
         return (-(amount + interest), -amount)
-    return (0.0, 0.0)
+    return (Decimal(0), Decimal(0))
 
 
 def get_or_create_singleton(session: Session, model, row_id: int = 1):

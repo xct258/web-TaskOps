@@ -75,7 +75,7 @@ function go(path) {
         <!-- 资产 -->
         <button
           class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
-          title="前往账本"
+          title="资金余额 · 前往账本"
           @click="go('/ledger')"
         >
           <span class="text-amber-400 font-bold">¥</span>
