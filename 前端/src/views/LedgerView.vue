@@ -6,7 +6,6 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
-import DatePicker from '@/components/DatePicker.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -41,7 +40,6 @@ const form = reactive({
   interest: 0,
   agreed_interest: '',
   record_type: 'expense',
-  record_date: todayISO(),
   category: '',
   notes: '',
   loan_id: '',
@@ -145,7 +143,6 @@ function openAdd() {
     interest: 0,
     agreed_interest: '',
     record_type: 'expense',
-    record_date: todayISO(),
     category: '',
     notes: '',
     loan_id: '',
@@ -165,7 +162,6 @@ function openEdit(record) {
     interest: record.interest || 0,
     agreed_interest: (purchaseLoan ? purchaseLoan.agreed_interest : record.agreed_interest) ?? '',
     record_type: record.purchase_id ? 'expense' : record.record_type,
-    record_date: record.record_date,
     category: record.category || '',
     notes: record.notes || '',
     loan_id: record.loan_id || '',
@@ -195,7 +191,7 @@ async function save() {
     amount: Number(form.amount),
     interest: form.record_type === 'debt_out' ? Number(form.interest) || 0 : 0,
     record_type: form.record_type,
-    record_date: form.record_date || todayISO(),
+    record_date: editing.value ? editing.value.record_date : todayISO(),
     category: form.category.trim(),
     notes: form.notes.trim(),
     loan_id: form.record_type === 'debt_out' && form.loan_id ? Number(form.loan_id) : null,
@@ -557,15 +553,9 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <p v-else-if="!loanOptions.length" class="text-[10px] text-slate-400">暂无借款，请先记录借入项目。</p>
         </div>
 
-        <div class="grid grid-cols-2 gap-2.5">
-          <div>
-            <label class="block text-slate-400 mb-1">{{ form.record_type === 'debt_out' ? '还款本金' : '金额' }}</label>
-            <input v-model="form.amount" type="number" step="0.01" :class="inputClass" placeholder="0.00" />
-          </div>
-          <div>
-            <label class="block text-slate-400 mb-1">日期</label>
-            <DatePicker v-model="form.record_date" />
-          </div>
+        <div>
+          <label class="block text-slate-400 mb-1">{{ form.record_type === 'debt_out' ? '还款本金' : '金额' }}</label>
+          <input v-model="form.amount" type="number" step="0.01" :class="inputClass" placeholder="0.00" />
         </div>
 
         <div v-if="purchaseMode || form.record_type === 'debt_in'">

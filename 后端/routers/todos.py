@@ -11,10 +11,10 @@
   ``processed`` 保持 False；下一次保证**严格晚于今天**（daily 即明天，其余跳过已错过的周期）。
 - 完成前会把旧状态存到 ``undo_snapshot``，``POST /todos/{rid}/undo`` 可回滚上一次完成。
 
-MQTT 提醒（push-server 双向同步，逻辑在 push_sync.py）：
+MQTT 提醒（TaskOps → push-server 单向投递，逻辑在 push_sync.py）：
 - ``mqtt_enabled`` 控制开关，``mqtt_at`` 保存精确排期，``push_task_id`` 保存回执。
 - 内存改完→先同步→再 commit，同步失败 rollback + 502（两边一致，无孤儿任务）。
-- ``processed``/``snooze`` 接受可选 ``callback_ref``（回调幂等，重放跳过推进）。
+- 客户端反馈只改 push-server 自身任务状态，不再回调回写待办。
 
 调试速查::
 
@@ -30,7 +30,7 @@ MQTT 提醒（push-server 双向同步，逻辑在 push_sync.py）：
 """
 import logging
 from datetime import date, datetime, timedelta
-from typing import List, Optional
+from typing import List
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
@@ -126,7 +126,6 @@ def create_todo(data: Todo, session: Session = Depends(get_todo_session)):
 
     data.mqtt_enabled = bool(data.mqtt_enabled)
     data.push_task_id = None
-    data.last_callback_ref = None
     if data.mqtt_enabled:
         if not data.mqtt_at:
             raise HTTPException(400, "mqtt_at is required when mqtt_enabled")
@@ -241,10 +240,9 @@ def _snapshot(r: Todo) -> dict:
 @router.put("/todos/{rid}/processed")
 def mark_processed(
     rid: int = Path(...),
-    body: Optional[dict] = None,
     session: Session = Depends(get_todo_session),
 ):
-    """完成打卡；body 可带 callback_ref（push-server 回调幂等：重放只跳过推进，不跳过同步）。
+    """完成打卡。
 
     循环+开 MQTT：mqtt_at 按到期日变化同步平移并 upsert 建下一期（先同步后 commit）；
     一次性+开推送：cancel 对端任务（best-effort，失败只记日志，不拦完成）。
@@ -254,41 +252,32 @@ def mark_processed(
         raise HTTPException(404, "Todo not found")
 
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-    callback_ref = (body or {}).get("callback_ref")
-    action = (body or {}).get("action", "done")
-    if action not in ("done", "cancelled"):
-        raise HTTPException(400, "action 只能是 done 或 cancelled")
-    replay = bool(callback_ref and r.last_callback_ref == callback_ref)
+    r.undo_snapshot = _snapshot(r)  # 供 /undo 回滚
+    r.last_completed_date = today
 
-    if not replay:
-        r.undo_snapshot = _snapshot(r)  # 供 /undo 回滚
-        r.last_completed_date = today
-        if callback_ref:
-            r.last_callback_ref = callback_ref
-
-        if r.recurring:
-            base_due = r.due_time or today
-            old_due = r.due_time
-            if r.catch_up:
-                # 逐期补做：按旧 due 只顺延一个周期（可能仍在过去，需继续完成）
-                next_due = calc_next_due(r, base_due)
-            else:
-                # 跳过已错过的周期：下一次严格晚于今天（daily 即明天）
-                next_due = calc_next_due_after(r, base_due, today)
-            # 循环顺延：推送时间按到期日偏移同步平移
-            if r.mqtt_enabled and r.mqtt_at and old_due and next_due:
-                try:
-                    r.mqtt_at = parse_mqtt_at(r.mqtt_at) + (next_due - old_due)
-                except ValueError:
-                    r.mqtt_at = None
-            r.due_time = next_due
-            reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
-            r.remind_time = next_due - reminder_offset
-            r.processed = False
-            r.closed_reason = None
+    if r.recurring:
+        base_due = r.due_time or today
+        old_due = r.due_time
+        if r.catch_up:
+            # 逐期补做：按旧 due 只顺延一个周期（可能仍在过去，需继续完成）
+            next_due = calc_next_due(r, base_due)
         else:
-            r.processed = True
-            r.closed_reason = action
+            # 跳过已错过的周期：下一次严格晚于今天（daily 即明天）
+            next_due = calc_next_due_after(r, base_due, today)
+        # 循环顺延：推送时间按到期日偏移同步平移
+        if r.mqtt_enabled and r.mqtt_at and old_due and next_due:
+            try:
+                r.mqtt_at = parse_mqtt_at(r.mqtt_at) + (next_due - old_due)
+            except ValueError:
+                r.mqtt_at = None
+        r.due_time = next_due
+        reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
+        r.remind_time = next_due - reminder_offset
+        r.processed = False
+        r.closed_reason = None
+    else:
+        r.processed = True
+        r.closed_reason = "done"
 
     # 推送同步：循环建下一期（失败回滚+502）；一次性取消对端（best-effort）
     if r.mqtt_enabled and r.mqtt_at and not (r.processed and not r.recurring):
@@ -297,7 +286,7 @@ def mark_processed(
         try:
             cancel_push_task(r.id)
         except PushSyncError as e:
-            logger.error(f"待办 #{r.id} 完成但取消提醒失败（稍后幽灵推送将打空回调）：{e}")
+            logger.error(f"待办 #{r.id} 完成但取消提醒失败（对端任务稍后仍会推送，需手动取消）：{e}")
 
     session.commit()
     session.refresh(r)
@@ -335,58 +324,32 @@ def undo_processed(
 @router.post("/todos/{rid}/snooze")
 def snooze_todo(
     rid: int = Path(...),
-    body: Optional[dict] = None,
     session: Session = Depends(get_todo_session),
 ):
     """行内推迟：循环任务顺延一个周期，一次性任务 +1 天（从 due/今天中较晚者起算）。
 
-    body 可带 callback_ref（幂等）与 mqtt_at（MQTT 回调只回写推送排期，不改到期/提醒日，不 upsert）；
     手动推迟+开 MQTT：mqtt_at 按到期日偏移平移并 upsert。
     """
     r = session.get(Todo, rid)
     if not r:
         raise HTTPException(404, "Todo not found")
-    body = body or {}
-    callback_ref = body.get("callback_ref")
-    replay = bool(callback_ref and r.last_callback_ref == callback_ref)
-
-    # MQTT 回调只回写精确推送时间，不修改到期日和提醒日。
-    if body.get("mqtt_at"):
-        if not r.mqtt_enabled:
-            raise HTTPException(400, "push reminder is disabled")
-        try:
-            mqtt_at = parse_mqtt_at(body["mqtt_at"])
-        except ValueError:
-            raise HTTPException(status_code=400, detail="Invalid mqtt_at format")
-        if not replay:
-            r.mqtt_at = mqtt_at
-            if callback_ref:
-                r.last_callback_ref = callback_ref
-            if body.get("note"):
-                logger.info(f"待办 #{r.id} 推迟备注：{body['note']}")
-        session.commit()
-        session.refresh(r)
-        return r
 
     today = datetime.now(ZoneInfo("Asia/Shanghai")).date()
-    if not replay:
-        if callback_ref:
-            r.last_callback_ref = callback_ref
-        base = r.due_time or today
-        old_due = r.due_time
-        anchor = base if base > today else today
-        next_due = calc_next_due(r, anchor) if r.recurring else anchor + timedelta(days=1)
+    base = r.due_time or today
+    old_due = r.due_time
+    anchor = base if base > today else today
+    next_due = calc_next_due(r, anchor) if r.recurring else anchor + timedelta(days=1)
 
-        if r.mqtt_enabled:
-            if r.mqtt_at and old_due and next_due:
-                # 手动推迟：推送时间按到期日偏移同步平移
-                try:
-                    r.mqtt_at = parse_mqtt_at(r.mqtt_at) + (next_due - old_due)
-                except ValueError:
-                    r.mqtt_at = None
-        r.due_time = next_due
-        reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
-        r.remind_time = next_due - reminder_offset
+    if r.mqtt_enabled:
+        if r.mqtt_at and old_due and next_due:
+            # 手动推迟：推送时间按到期日偏移同步平移
+            try:
+                r.mqtt_at = parse_mqtt_at(r.mqtt_at) + (next_due - old_due)
+            except ValueError:
+                r.mqtt_at = None
+    r.due_time = next_due
+    reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
+    r.remind_time = next_due - reminder_offset
 
     # 手动推迟需同步新的推送排期。
     if r.mqtt_enabled and r.mqtt_at:

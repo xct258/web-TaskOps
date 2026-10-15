@@ -39,7 +39,6 @@ class Todo(SQLModel, table=True):
     mqtt_enabled: bool = Field(default=False)
     mqtt_at: Optional[datetime] = Field(default=None)
     push_task_id: Optional[int] = Field(default=None)
-    last_callback_ref: Optional[str] = Field(default=None)
 
     priority: int = Field(default=0)  # 优先级：0 无 / 1 低 / 2 中 / 3 高
     catch_up: bool = Field(default=False)  # 循环逾期后：False 跳过到未来，True 逐期补做
