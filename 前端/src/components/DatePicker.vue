@@ -16,10 +16,6 @@ const viewMonth = ref(0)
 const WEEKDAYS = ['一', '二', '三', '四', '五', '六', '日']
 const pad = (value) => String(value).padStart(2, '0')
 
-const today = computed(() => {
-  const now = new Date()
-  return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`
-})
 const displayValue = computed(() => {
   if (!props.modelValue) return ''
   const [year, month, day] = props.modelValue.split('-')
@@ -37,7 +33,6 @@ const calendarDays = computed(() => {
       date,
       day: value.getDate(),
       currentMonth: value.getMonth() === viewMonth.value - 1,
-      today: date === today.value,
       selected: date === props.modelValue,
     }
   })
@@ -51,7 +46,7 @@ function setView(value) {
 }
 
 function openPicker() {
-  setView(props.modelValue || today.value)
+  setView(props.modelValue)
   open.value = true
 }
 
@@ -69,11 +64,6 @@ function shiftMonth(amount) {
 function selectDate(date) {
   emit('update:modelValue', date)
   open.value = false
-}
-
-function selectToday() {
-  setView(today.value)
-  selectDate(today.value)
 }
 
 function clear() {
@@ -132,10 +122,9 @@ onUnmounted(() => {
             <button
               type="button"
               class="w-full h-full rounded-lg text-[11px] font-mono transition"
-              :class="cell.selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : cell.today ? 'border border-indigo-400/60 text-indigo-300 hover:bg-indigo-500/15' : cell.currentMonth ? 'text-slate-300 hover:bg-white/10' : 'text-slate-500 hover:bg-white/10 hover:text-slate-300'"
-              :title="cell.today ? `${cell.date} · 今天` : cell.date"
+              :class="cell.selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : cell.currentMonth ? 'text-slate-300 hover:bg-white/10' : 'text-slate-500 hover:bg-white/10 hover:text-slate-300'"
+              :title="cell.date"
               :aria-label="cell.date"
-              :aria-current="cell.today ? 'date' : undefined"
               @click="selectDate(cell.date)"
             >
               {{ cell.day }}
@@ -144,8 +133,8 @@ onUnmounted(() => {
         </div>
 
         <div class="flex items-center justify-between gap-2 mt-3 pt-2 border-t border-white/10">
-          <button type="button" class="text-[11px] text-indigo-300 hover:text-indigo-200 transition" @click="selectToday">今天</button>
           <button v-if="clearable && modelValue" type="button" class="text-[11px] text-rose-300 hover:text-rose-200 transition" @click="clear">清除</button>
+          <div></div>
           <button type="button" class="px-3 py-1.5 rounded-lg bg-white/5 text-xs text-slate-300 hover:bg-white/10" @click="open = false">取消</button>
         </div>
       </section>

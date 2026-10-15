@@ -48,13 +48,6 @@ function normalizeTime(field) {
   if (/^\d{1,2}$/.test(String(target.value))) target.value = pad(target.value)
 }
 
-function chooseSoon(minutes) {
-  const date = new Date(Date.now() + (8 * 60 + minutes) * 60000)
-  draftDate.value = `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(date.getUTCDate())}`
-  draftHour.value = pad(date.getUTCHours())
-  draftMinute.value = pad(date.getUTCMinutes())
-}
-
 function confirm() {
   if (!draftValue.value) return
   emit('update:modelValue', draftValue.value)
@@ -107,9 +100,6 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
               <span class="text-[10px] text-slate-500">{{ field === 'hour' ? '小时 · 00–23' : '分钟 · 00–59' }}</span>
             </div>
           </div>
-        </div>
-        <div class="flex gap-2 mt-3">
-          <button v-for="minutes in [10, 30, 60]" :key="minutes" type="button" class="flex-1 rounded-lg border border-white/10 py-1.5 text-xs text-slate-300 hover:border-sky-400/40 hover:bg-sky-500/10 transition" @click="chooseSoon(minutes)">{{ minutes === 60 ? '1小时后' : `${minutes}分钟后` }}</button>
         </div>
         <p class="mt-3 text-center text-xs" :class="draftValue ? 'text-sky-300' : 'text-rose-300'">{{ draftValue ? `${draftDate} ${pad(draftHour)}:${pad(draftMinute)} · ${pushRelative(draftValue)}` : '请选择日期，并输入有效的小时和分钟' }}</p>
         <div class="flex justify-end gap-2 mt-3 pt-2 border-t border-white/10">
