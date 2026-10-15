@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
+import DatePicker from '@/components/DatePicker.vue'
 import PushTimePicker from '@/components/PushTimePicker.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
@@ -555,11 +556,11 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         <div class="grid grid-cols-2 gap-2.5">
           <div>
             <label :class="labelClass">到期日期</label>
-            <input v-model="form.due_time" type="date" :class="inputClass" />
+            <DatePicker v-model="form.due_time" />
           </div>
           <div>
             <label :class="labelClass">提醒日期</label>
-            <input v-model="form.remind_time" type="date" :class="inputClass" />
+            <DatePicker v-model="form.remind_time" />
           </div>
         </div>
 

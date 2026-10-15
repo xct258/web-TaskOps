@@ -6,6 +6,7 @@ import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
+import DatePicker from '@/components/DatePicker.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -467,7 +468,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           </div>
           <div>
             <label class="block text-slate-400 mb-1">日期</label>
-            <input v-model="form.record_date" type="date" :class="inputClass" />
+            <DatePicker v-model="form.record_date" />
           </div>
         </div>
 
