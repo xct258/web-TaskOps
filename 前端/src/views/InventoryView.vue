@@ -7,9 +7,11 @@ import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import { useToast } from '@/composables/useToast'
+import { usePageMenu } from '@/composables/usePageMenu'
 import { parseTags, tagColor } from '@/utils/format'
 
 const toast = useToast()
+const pageMenu = usePageMenu()
 const items = ref([])
 const loading = ref(true)
 const search = ref('')
@@ -138,6 +140,10 @@ function onSearchKeydown(event) {
 }
 
 onMounted(() => {
+  pageMenu.setMenu([
+    { key: 'new', label: '添加物品', action: openAdd },
+    { key: 'refresh', label: '刷新', action: load },
+  ], '库存')
   load()
   window.addEventListener('keydown', onSearchKeydown)
 })
