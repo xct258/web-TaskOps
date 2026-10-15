@@ -39,13 +39,14 @@ class FinancedPurchase(SQLModel):
     record_date: date = Field(default_factory=lambda: shanghai_now().date())
     category: str = ''
     notes: str = ''
+    agreed_interest: float | None = None
 
 
 def purchase_entries(purchase):
     fields = dict(item=purchase.item, amount=purchase.amount, record_date=purchase.record_date,
                   category=purchase.category.strip(), notes=purchase.notes.strip(),
                   purchase_kind=purchase.kind, financing_source=purchase.financing_source.strip())
-    rows = [Ledger(record_type=kind, **fields) for kind in ['debt_in', 'expense']]
+    rows = [Ledger(record_type=kind, agreed_interest=purchase.agreed_interest if kind == 'debt_in' else None, **fields) for kind in ['debt_in', 'expense']]
     for row in rows:
         validate_entry(row)
     return rows
@@ -86,7 +87,7 @@ def update_financed_purchase(purchase_id: str, purchase: FinancedPurchase, sessi
     for row in rows:
         apply_effect(asset, liability, row, -1)
         draft = drafts[row.record_type]
-        for field in ['item', 'amount', 'record_date', 'category', 'notes', 'purchase_kind', 'financing_source']:
+        for field in ['item', 'amount', 'record_date', 'category', 'notes', 'purchase_kind', 'financing_source', 'agreed_interest']:
             setattr(row, field, getattr(draft, field))
         apply_effect(asset, liability, row)
         session.add(row)
@@ -113,10 +114,17 @@ def validate_entry(entry):
     if entry.record_type != 'debt_out' and (not isinstance(entry.item, str) or not entry.item.strip()):
         raise HTTPException(422, '项目不能为空')
     amount, interest = money(entry.amount), money(entry.interest)
-    if amount <= 0 or interest < 0:
-        raise HTTPException(422, '金额须大于零，利息不能为负数')
+    if interest < 0 or (entry.record_type == 'debt_out' and (amount < 0 or amount + interest <= 0)) or (entry.record_type != 'debt_out' and amount <= 0):
+        raise HTTPException(422, '流水金额须大于零；还款本金可为零，但本金与利息合计须大于零，利息不能为负数')
     if entry.record_type != 'debt_out' and interest:
         raise HTTPException(422, '只有还款流水可以填写利息')
+    if entry.agreed_interest is not None:
+        if entry.record_type != 'debt_in':
+            raise HTTPException(422, '只有借款可以填写约定总利息')
+        agreed = money(entry.agreed_interest)
+        if agreed < 0:
+            raise HTTPException(422, '约定总利息不能为负数')
+        entry.agreed_interest = float(agreed)
     entry.item = entry.item.strip() if entry.record_type != 'debt_out' else ''
     entry.amount, entry.interest = float(amount), float(interest)
 
@@ -172,14 +180,25 @@ def list_loans(session: Session = Depends(get_ledger_session)):
     loans = session.exec(select(Ledger).where(Ledger.record_type == 'debt_in').order_by(Ledger.record_date.desc(), Ledger.id.desc())).all()
     repayments = session.exec(select(Ledger).where(Ledger.record_type == 'debt_out', Ledger.loan_id.is_not(None))).all()
     paid = {}
+    interest_paid = {}
     for row in repayments:
         paid[row.loan_id] = paid.get(row.loan_id, Decimal(0)) + money(row.amount)
-    return [{
-        'id': loan.id, 'item': loan.item, 'record_date': loan.record_date,
-        'amount': loan.amount, 'repaid': float(paid.get(loan.id, Decimal(0))),
-        'remaining': float(money(loan.amount) - paid.get(loan.id, Decimal(0))),
-        'purchase_kind': loan.purchase_kind, 'financing_source': loan.financing_source,
-    } for loan in loans]
+        interest_paid[row.loan_id] = interest_paid.get(row.loan_id, Decimal(0)) + money(row.interest)
+    result = []
+    for loan in loans:
+        remaining = money(loan.amount) - paid.get(loan.id, Decimal(0))
+        actual_interest = interest_paid.get(loan.id, Decimal(0))
+        expected_interest = max(Decimal(0), money(loan.agreed_interest) - actual_interest) if loan.agreed_interest is not None else None
+        result.append({
+            'id': loan.id, 'item': loan.item, 'record_date': loan.record_date,
+            'amount': loan.amount, 'repaid': float(paid.get(loan.id, Decimal(0))),
+            'remaining': float(remaining),
+            'agreed_interest': loan.agreed_interest, 'interest_paid': float(actual_interest),
+            'expected_interest_remaining': float(expected_interest) if expected_interest is not None else None,
+            'expected_total_due': float(remaining + expected_interest) if expected_interest is not None else None,
+            'purchase_id': loan.purchase_id, 'purchase_kind': loan.purchase_kind, 'financing_source': loan.financing_source,
+        })
+    return result
 
 
 @router.get('/ledger/summary')
@@ -275,6 +294,7 @@ def update_ledger(
     item.category = updated.category
     item.notes = updated.notes
     item.loan_id = updated.loan_id
+    item.agreed_interest = updated.agreed_interest
 
     # 3. 入账新影响
     apply_effect(asset, liability, item)

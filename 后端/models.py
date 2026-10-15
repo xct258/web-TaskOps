@@ -109,6 +109,7 @@ class Ledger(SQLModel, table=True):
     item: str = Field(default="")
     amount: float
     interest: float = Field(default=0.0)
+    agreed_interest: Optional[float] = Field(default=None)
     record_type: str = Field(default="expense")
     loan_id: Optional[int] = Field(default=None, index=True)
     purchase_id: Optional[str] = Field(default=None, index=True)

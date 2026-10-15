@@ -20,3 +20,13 @@ test('编辑或删除还款后利息行随之更新，无息还款不产生支�
   assert.equal(ledgerRows([{ ...record, interest: 0 }]).length, 1)
   assert.equal(ledgerRows([]).length, 0)
 })
+
+test('约定利息不生成支出，只付实际利息时仍生成支出行', () => {
+  const loan = { id: 1, record_type: 'debt_in', amount: 100, agreed_interest: 10 }
+  assert.equal(ledgerRows([loan]).filter((row) => row.record_type === 'expense').length, 0)
+  const payment = { id: 2, record_type: 'debt_out', amount: 0, interest: 10, loan_id: 1 }
+  const expenses = ledgerRows([loan, payment]).filter((row) => row.record_type === 'expense')
+  assert.equal(expenses.length, 1)
+  assert.equal(expenses[0].amount, 10)
+  assert.equal(expenses[0].repayment, payment)
+})

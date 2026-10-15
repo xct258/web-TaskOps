@@ -39,6 +39,7 @@ const form = reactive({
   item: '',
   amount: '',
   interest: 0,
+  agreed_interest: '',
   record_type: 'expense',
   record_date: todayISO(),
   category: '',
@@ -68,10 +69,13 @@ const inputClass =
 const net = computed(() => (Number(asset.value) || 0) - (Number(liability.value) || 0))
 
 const monthStats = ref({ income: 0, expense: 0, interest: 0, balance: 0 })
-const loanOptions = computed(() => loans.value.map((loan) => ({
-  ...loan,
-  available: (Math.round(loan.remaining * 100) + (editing.value?.record_type === 'debt_out' && editing.value.loan_id === loan.id ? Math.round(editing.value.amount * 100) : 0)) / 100,
-})).filter((loan) => loan.available > 0 || loan.id === Number(form.loan_id)))
+const loanOptions = computed(() => loans.value.map((loan) => {
+  const original = editing.value?.record_type === 'debt_out' && editing.value.loan_id === loan.id ? editing.value : null
+  const available = (Math.round(loan.remaining * 100) + Math.round(Number(original?.amount || 0) * 100)) / 100
+  const interestPaid = (Math.round(loan.interest_paid * 100) - Math.round(Number(original?.interest || 0) * 100)) / 100
+  const interestRemaining = loan.agreed_interest == null ? null : Math.max(0, Math.round(loan.agreed_interest * 100) - Math.round(interestPaid * 100)) / 100
+  return { ...loan, available, interestPaid, interestRemaining }
+}))
 const selectedLoan = computed(() => loanOptions.value.find((loan) => loan.id === Number(form.loan_id)))
 const loansById = computed(() => new Map(loans.value.map((loan) => [loan.id, loan])))
 const availableFunds = computed(() => {
@@ -139,6 +143,7 @@ function openAdd() {
     item: '',
     amount: '',
     interest: 0,
+    agreed_interest: '',
     record_type: 'expense',
     record_date: todayISO(),
     category: '',
@@ -153,10 +158,12 @@ function openEdit(record) {
   editing.value = record
   purchaseKind.value = record.purchase_kind || 'cash'
   financingSource.value = record.financing_source || ''
+  const purchaseLoan = record.purchase_id ? loans.value.find((loan) => loan.purchase_id === record.purchase_id) : null
   Object.assign(form, {
     item: record.item,
     amount: record.amount,
     interest: record.interest || 0,
+    agreed_interest: (purchaseLoan ? purchaseLoan.agreed_interest : record.agreed_interest) ?? '',
     record_type: record.purchase_id ? 'expense' : record.record_type,
     record_date: record.record_date,
     category: record.category || '',
@@ -174,10 +181,14 @@ async function save() {
     if (!form.loan_id) return toast.error('请选择要偿还的借款项目')
     if (form.loan_id && (!selectedLoan.value || Math.round(Number(form.amount) * 100) > Math.round(selectedLoan.value.available * 100))) return toast.error('还款本金不能超过所选借款的可还本金')
   }
-  if ((form.record_type !== 'debt_out' && !form.item.trim()) || !Number.isFinite(Number(form.amount)) || Number(form.amount) <= 0 || !Number.isFinite(Number(form.interest)) || Number(form.interest) < 0) {
-    toast.error(form.record_type === 'debt_out' ? '请填写正数本金及非负利息' : '请填写项目、正数金额及非负利息')
+  const amount = Number(form.amount)
+  const actualInterest = form.record_type === 'debt_out' ? Number(form.interest) : 0
+  if ((form.record_type !== 'debt_out' && !form.item.trim()) || !Number.isFinite(amount) || !Number.isFinite(actualInterest) || actualInterest < 0 || (form.record_type === 'debt_out' ? amount < 0 || amount + actualInterest <= 0 : amount <= 0)) {
+    toast.error(form.record_type === 'debt_out' ? '本金和利息不能为负，实际支付合计须大于零' : '请填写项目和正数金额')
     return
   }
+  const agreedInterest = (purchaseMode.value || form.record_type === 'debt_in') && form.agreed_interest !== '' ? Number(form.agreed_interest) : null
+  if (agreedInterest !== null && (!Number.isFinite(agreedInterest) || agreedInterest < 0)) return toast.error('约定总利息须为非负金额，未知可留空')
   if (insufficientFunds.value) return toast.error('资金不足，请减少支出或先记录实际借入资金')
   const payload = {
     item: form.record_type === 'debt_out' ? undefined : form.item.trim(),
@@ -188,6 +199,7 @@ async function save() {
     category: form.category.trim(),
     notes: form.notes.trim(),
     loan_id: form.record_type === 'debt_out' && form.loan_id ? Number(form.loan_id) : null,
+    agreed_interest: form.record_type === 'debt_in' ? agreedInterest : null,
   }
   saving.value = true
   try {
@@ -196,6 +208,7 @@ async function save() {
         item: form.item.trim(), amount: Number(form.amount), kind: purchaseKind.value,
         financing_source: financingSource.value.trim(), record_date: payload.record_date,
         category: payload.category, notes: payload.notes,
+        agreed_interest: agreedInterest,
       }
       if (editing.value) await api.ledger.updatePurchase(editing.value.purchase_id, purchase)
       else await api.ledger.createPurchase(purchase)
@@ -465,7 +478,11 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
             </div>
             <div v-if="record.record_type === 'debt_out'" class="text-[10px] text-amber-300/70 mt-1 truncate">偿还：{{ loansById.get(record.loan_id)?.item }} · #{{ record.loan_id }}</div>
             <div v-if="record.repayment" class="text-[10px] text-amber-300/70 mt-1 truncate">关联还款 #{{ record.repayment.id }} · 编辑或删除将同步处理整笔还款</div>
-            <div v-if="record.record_type === 'debt_in' && loansById.has(record.id)" class="text-[10px] text-amber-300/70 mt-1">剩余本金 ¥{{ formatMoney(loansById.get(record.id).remaining) }}</div>
+            <div v-if="record.record_type === 'debt_in' && loansById.has(record.id)" class="text-[10px] text-amber-300/70 mt-1 space-y-0.5">
+              <div>未还本金 ¥{{ formatMoney(loansById.get(record.id).remaining) }} · 已付利息 ¥{{ formatMoney(loansById.get(record.id).interest_paid) }}</div>
+              <div v-if="loansById.get(record.id).agreed_interest != null">约定总利息 ¥{{ formatMoney(loansById.get(record.id).agreed_interest) }} · 预计未付利息 ¥{{ formatMoney(loansById.get(record.id).expected_interest_remaining) }} · 预计待还合计 ¥{{ formatMoney(loansById.get(record.id).expected_total_due) }}</div>
+              <div v-else class="text-slate-500">未填写约定利息，预计待还合计未估算</div>
+            </div>
             <div v-if="record.purchase_id" class="text-[10px] text-sky-300/80 mt-1">{{ record.purchase_kind === 'credit_card' ? '信用卡消费' : '贷款购买' }}{{ record.financing_source ? ` · ${record.financing_source}` : '' }} · 借入与支出联动</div>
           </div>
 
@@ -516,7 +533,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <label class="block text-slate-400">{{ purchaseKind === 'credit_card' ? '银行／信用卡（可选）' : '贷款机构（可选）' }}
             <input v-model="financingSource" :class="inputClass" class="mt-1" :placeholder="purchaseKind === 'credit_card' ? '例如：招商银行信用卡' : '例如：银行手机分期'" />
           </label>
-          <p class="text-[11px] text-sky-200/80">一次生成关联的借入和支出流水，资金余额不变，负债增加购买金额。利息在实际还款时填写。</p>
+          <p class="text-[11px] text-sky-200/80">资金余额不变，负债增加购买金额。约定利息只作预估，实际利息在支付时记支出。</p>
         </div>
 
         <div v-if="purchaseMode || form.record_type !== 'debt_out'">
@@ -532,8 +549,12 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           </select>
           <p v-if="loansLoading" class="text-[10px] text-slate-500">正在加载借款项目…</p>
           <p v-else-if="loansError" class="text-[10px] text-rose-300">加载失败，请重新打开表单。</p>
-          <p v-else-if="selectedLoan" class="text-[10px] text-amber-200">借入 ¥{{ formatMoney(selectedLoan.amount) }} · 本次可还本金 ¥{{ formatMoney(selectedLoan.available) }}（不含利息）</p>
-          <p v-else-if="!loanOptions.length" class="text-[10px] text-slate-400">暂无未还清的借款，请先记录借入项目。</p>
+          <div v-else-if="selectedLoan" class="text-[10px] text-amber-200 space-y-1">
+            <p>借入 ¥{{ formatMoney(selectedLoan.amount) }} · 本次可还本金 ¥{{ formatMoney(selectedLoan.available) }} · 此前已付利息 ¥{{ formatMoney(selectedLoan.interestPaid) }}</p>
+            <p v-if="selectedLoan.interestRemaining != null">约定总利息 ¥{{ formatMoney(selectedLoan.agreed_interest) }} · 预计未付利息 ¥{{ formatMoney(selectedLoan.interestRemaining) }} · 预计待还合计 ¥{{ formatMoney((Math.round(selectedLoan.available * 100) + Math.round(selectedLoan.interestRemaining * 100)) / 100) }}</p>
+            <p v-else class="text-slate-500">未约定总利息，请按实际账单填写本次利息。</p>
+          </div>
+          <p v-else-if="!loanOptions.length" class="text-[10px] text-slate-400">暂无借款，请先记录借入项目。</p>
         </div>
 
         <div class="grid grid-cols-2 gap-2.5">
@@ -547,9 +568,17 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           </div>
         </div>
 
+        <div v-if="purchaseMode || form.record_type === 'debt_in'">
+          <label class="block text-slate-400 mb-1">约定总利息（可选）</label>
+          <input v-model="form.agreed_interest" type="number" min="0" step="0.01" :class="inputClass" placeholder="未知留空，无息填 0" />
+          <p class="text-[10px] text-slate-500 mt-1">填写整笔借款的预计总利息，仅用于预估，不立即计入支出或负债本金。</p>
+        </div>
+
         <div v-if="!purchaseMode && form.record_type === 'debt_out'">
-          <label class="block text-slate-400 mb-1">利息</label>
-          <input v-model.number="form.interest" type="number" step="0.01" :class="inputClass" placeholder="0.00" />
+          <label class="block text-slate-400 mb-1">本次实际支付利息</label>
+          <input v-model.number="form.interest" type="number" min="0" step="0.01" :class="inputClass" placeholder="0.00" />
+          <button v-if="selectedLoan?.interestRemaining > 0" class="mt-1 text-[10px] text-amber-300 hover:text-amber-200" @click="form.interest = selectedLoan.interestRemaining">填入预计剩余全部利息 ¥{{ formatMoney(selectedLoan.interestRemaining) }}</button>
+          <p class="text-[10px] text-slate-500 mt-1">按本次实际支付填写，可与约定不同；只付利息时本金填 0。</p>
         </div>
 
         <div v-if="!purchaseMode && ['expense', 'debt_out'].includes(form.record_type)" class="rounded-xl border p-2.5 text-[11px]" :class="insufficientFunds ? 'border-rose-400/30 bg-rose-500/10 text-rose-300' : 'border-white/10 bg-white/5 text-slate-400'">

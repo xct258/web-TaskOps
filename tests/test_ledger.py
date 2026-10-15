@@ -326,6 +326,78 @@ class LedgerTests(unittest.TestCase):
             ledger.update_ledger(income.id, Ledger(item='伪造', amount=100, record_type='income', purchase_kind='credit_card'), self.session)
         self.assertEqual(self.balances(), (100, 0))
 
+    def test_agreed_interest_is_estimate_not_cash_expense_or_principal_debt(self):
+        loan = ledger.create_ledger(Ledger(item='分期', amount=1000, record_type='debt_in', agreed_interest=100), self.session)
+        info = ledger.list_loans(self.session)[0]
+        self.assertEqual(self.balances(), (1000, 1000))
+        self.assertEqual(ledger.ledger_summary(self.session)['expense'], 0)
+        self.assertEqual((info['interest_paid'], info['expected_interest_remaining'], info['expected_total_due']), (0, 100, 1100))
+        repayment = self.entry('debt_out', 200, 20, loan.id)
+        info = ledger.list_loans(self.session)[0]
+        self.assertEqual((info['remaining'], info['interest_paid'], info['expected_interest_remaining'], info['expected_total_due']), (800, 20, 80, 880))
+        self.assertEqual(self.balances(), (780, 800))
+        self.assertEqual(ledger.ledger_summary(self.session)['expense'], 20)
+        ledger.update_ledger(repayment.id, Ledger(amount=200, interest=40, record_type='debt_out', loan_id=loan.id), self.session)
+        info = ledger.list_loans(self.session)[0]
+        self.assertEqual((info['interest_paid'], info['expected_interest_remaining']), (40, 60))
+        self.assertEqual(self.balances(), (760, 800))
+        ledger.delete_ledger(repayment.id, self.session)
+        self.assertEqual(ledger.list_loans(self.session)[0]['expected_interest_remaining'], 100)
+        self.assertEqual(self.balances(), (1000, 1000))
+
+    def test_unknown_interest_and_explicit_interest_free_are_distinct(self):
+        unknown = self.entry('debt_in', 100)
+        free = ledger.create_ledger(Ledger(item='无息借款', amount=100, record_type='debt_in', agreed_interest=0), self.session)
+        loans = {row['id']: row for row in ledger.list_loans(self.session)}
+        self.assertIsNone(loans[unknown.id]['expected_total_due'])
+        self.assertIsNone(loans[unknown.id]['expected_interest_remaining'])
+        self.assertEqual(loans[free.id]['expected_total_due'], 100)
+        self.assertEqual(loans[free.id]['expected_interest_remaining'], 0)
+
+    def test_actual_interest_can_differ_from_estimate(self):
+        loan = ledger.create_ledger(Ledger(item='借款', amount=1000, record_type='debt_in', agreed_interest=10), self.session)
+        self.entry('debt_out', 100, 20, loan.id)
+        info = ledger.list_loans(self.session)[0]
+        self.assertEqual(info['interest_paid'], 20)
+        self.assertEqual(info['expected_interest_remaining'], 0)
+        self.assertEqual(info['expected_total_due'], 900)
+        self.assertEqual(ledger.ledger_summary(self.session)['expense'], 20)
+
+    def test_interest_only_payment_after_principal_is_paid(self):
+        loan = ledger.create_ledger(Ledger(item='先本后息', amount=100, record_type='debt_in', agreed_interest=10), self.session)
+        self.entry('debt_out', 100, loan_id=loan.id)
+        info = ledger.list_loans(self.session)[0]
+        self.assertEqual((info['remaining'], info['expected_total_due']), (0, 10))
+        self.entry('income', 10)
+        self.entry('debt_out', 0, 10, loan.id)
+        info = ledger.list_loans(self.session)[0]
+        self.assertEqual((info['remaining'], info['interest_paid'], info['expected_total_due']), (0, 10, 0))
+        self.assertEqual(self.balances(), (0, 0))
+        self.assertEqual(ledger.ledger_summary(self.session)['expense'], 10)
+        with self.assertRaises(HTTPException):
+            self.entry('debt_out', 0, 0, loan.id)
+
+    def test_agreed_interest_validation(self):
+        for value in [-1, float('inf'), float('nan')]:
+            with self.assertRaises(HTTPException):
+                ledger.create_ledger(Ledger(item='借款', amount=100, record_type='debt_in', agreed_interest=value), self.session)
+        with self.assertRaises(HTTPException):
+            ledger.create_ledger(Ledger(item='收入', amount=100, record_type='income', agreed_interest=10), self.session)
+        self.assertEqual(self.balances(), (0, 0))
+
+    def test_financed_purchase_interest_estimate_belongs_only_to_loan(self):
+        rows = ledger.create_financed_purchase(ledger.FinancedPurchase(item='手机', amount=1000, agreed_interest=100), self.session)
+        loan = next(row for row in rows if row.record_type == 'debt_in')
+        expense = next(row for row in rows if row.record_type == 'expense')
+        self.assertEqual(loan.agreed_interest, 100)
+        self.assertIsNone(expense.agreed_interest)
+        self.assertEqual(self.balances(), (0, 1000))
+        self.assertEqual(ledger.ledger_summary(self.session)['expense'], 1000)
+        self.assertEqual(ledger.list_loans(self.session)[0]['expected_total_due'], 1100)
+        ledger.update_financed_purchase(loan.purchase_id, ledger.FinancedPurchase(item='手机', amount=1000, agreed_interest=60), self.session)
+        self.assertEqual(ledger.list_loans(self.session)[0]['expected_total_due'], 1060)
+        self.assertEqual(self.balances(), (0, 1000))
+
 
 if __name__ == '__main__':
     unittest.main()
