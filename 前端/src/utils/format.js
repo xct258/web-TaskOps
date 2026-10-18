@@ -191,6 +191,13 @@ export function inPending(todo) {
   return String(todo.due_time).slice(0, 10) <= todayISO()
 }
 
+/** 循环任务今天这一期做过没有（打卡只会更新 last_completed_date，processed 恒为 false）。 */
+export function doneToday(todo) {
+  return Boolean(
+    todo.last_completed_date && String(todo.last_completed_date).slice(0, 10) === todayISO(),
+  )
+}
+
 export const RECORD_TYPE_META = {
   income: { label: '收入', color: 'text-emerald-400', bg: 'bg-emerald-500/15 border-emerald-400/30', sign: '+' },
   expense: { label: '支出', color: 'text-rose-400', bg: 'bg-rose-500/15 border-rose-400/30', sign: '-' },

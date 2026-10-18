@@ -20,6 +20,7 @@ import {
   PRIORITY_OPTIONS,
   cycleLabel,
   daysUntil,
+  doneToday,
   formatDate,
   inPending,
   parseDate,
@@ -143,8 +144,12 @@ const stats = computed(() => {
 function matchesFilter(todo, key) {
   const today = todayISO()
   if (key === 'all') return true
-  // 取消的任务也是 processed=true，靠 closed_reason 区分，别混进「已完成」
-  if (key === 'done') return todo.processed && todo.closed_reason !== 'cancelled'
+  // 取消的任务也是 processed=true，靠 closed_reason 区分，别混进「已完成」；
+  // 循环任务打卡后 processed 恒为 false（它要顺延到下一期），所以看「今天做过没有」
+  if (key === 'done') {
+    if (todo.processed) return todo.closed_reason !== 'cancelled'
+    return todo.recurring && doneToday(todo)
+  }
   if (key === 'cancelled') return todo.processed && todo.closed_reason === 'cancelled'
   if (key === 'pending') return inPending(todo)
   if (key === 'overdue') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < today
@@ -176,6 +181,8 @@ function dueStatus(todo) {
   // 不是逾期（打卡后 due_time 直接顺延到未来，这个「逾期」根本不成立）。
   // 所以循环用「今天 / 明天 / 已断 N 天」，一次性任务才用「今天到期 / 逾期」。
   if (todo.recurring) {
+    // 今天这一期已经做过：due 已顺延到下一次，不用再催了（补做还没补完时 d 仍 < 0，往下走）
+    if (d > 0 && doneToday(todo)) return { label: `下次 ${formatDate(todo.due_time)}`, cls: 'text-slate-500' }
     if (d < 0) {
       // 逐期补做 = 落下的还要做；跳过模式 = 这几期直接作废，只是断了
       return todo.catch_up
