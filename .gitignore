@@ -1,9 +1,12 @@
 # TaskOps runtime data and generated files
 后端/data/
-后端/backend.log
 后端/__pycache__/
 后端/routers/__pycache__/
 *.py[cod]
+
+# 本地起服务产生的日志与 pid（nohup 起的 uvicorn / vite dev）
+*.log
+*.pid
 
 # Frontend dependencies and build output
 前端/node_modules/
