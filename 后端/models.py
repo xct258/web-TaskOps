@@ -67,6 +67,16 @@ class Todo(SQLModel, table=True):
         return value.astimezone(timezone).isoformat()
 
 
+# 循环待办的打卡记录：每完成一次记一条，供「完成历史 / 打卡日历」用。
+# 只记循环任务——一次性任务完成就结束了，没有「历史」可言。
+# 同一天重复打卡只留一条；undo 时按快照里的 id 精确删除。
+class TodoCompletion(SQLModel, table=True):
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+    todo_id: int = Field(index=True)
+    completed_on: date
+
+
 # 书签。tags 存 JSON 数组；PUT 支持逗号字符串自动转数组。
 class Bookmark(SQLModel, table=True):
 

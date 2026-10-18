@@ -164,6 +164,13 @@ export const CYCLE_LABELS = {
   none: '不循环',
 }
 
+/** 循环文案：非循环返回 null；自定义天数模式带上天数。 */
+export function cycleLabel(todo) {
+  if (!todo?.recurring) return null
+  const base = CYCLE_LABELS[todo.cycle_mode] || '循环'
+  return todo.cycle_mode === 'days' ? `每 ${todo.cycle_days || 1} 天` : base
+}
+
 export const RECORD_TYPE_META = {
   income: { label: '收入', color: 'text-emerald-400', bg: 'bg-emerald-500/15 border-emerald-400/30', sign: '+' },
   expense: { label: '支出', color: 'text-rose-400', bg: 'bg-rose-500/15 border-rose-400/30', sign: '-' },

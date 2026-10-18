@@ -76,6 +76,7 @@ export const api = {
     markProcessed: (id) => request(`/todos/${id}/processed`, { method: 'PUT' }),
     undo: (id) => request(`/todos/${id}/undo`, { method: 'POST' }),
     snooze: (id) => request(`/todos/${id}/snooze`, { method: 'POST' }),
+    history: (id) => request(`/todos/${id}/history`),
   },
 
   /* --------------------------- 服务状态 --------------------------- */

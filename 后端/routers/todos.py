@@ -26,18 +26,19 @@ MQTT 提醒（TaskOps → push-server 单向投递，逻辑在 push_sync.py）�
     $ curl -X PUT localhost:8481/todos/1/processed
     $ curl -X POST localhost:8481/todos/1/undo
     $ curl -X POST localhost:8481/todos/1/snooze
+    $ curl localhost:8481/todos/1/history
     $ curl -X DELETE localhost:8481/todos/1
 """
 import logging
 from datetime import date, datetime, timedelta
-from typing import List
+from typing import List, Optional
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query
 from sqlmodel import Session, select
 
 from db import get_todo_session
-from models import Todo
+from models import Todo, TodoCompletion
 from push_sync import PushSyncError, cancel_push_task, parse_mqtt_at, upsert_push_task
 from utils import calc_next_due, calc_next_due_after, parse_due_date
 
@@ -241,6 +242,25 @@ def _snapshot(r: Todo) -> dict:
     }
 
 
+def _log_completion(session: Session, todo_id: int, day: date) -> Optional[TodoCompletion]:
+    """记一条循环任务的打卡历史。
+
+    同一天重复打卡只留一条：此时返回 None，表示「这次没新增记录」，
+    调用方据此决定 undo 时要不要删（不能删掉上午那次留下的那行）。
+    """
+    exists = session.exec(
+        select(TodoCompletion).where(
+            TodoCompletion.todo_id == todo_id, TodoCompletion.completed_on == day
+        )
+    ).first()
+    if exists:
+        return None
+    row = TodoCompletion(todo_id=todo_id, completed_on=day)
+    session.add(row)
+    session.flush()  # 拿 id，供 undo 精确回滚
+    return row
+
+
 @router.put("/todos/{rid}/processed")
 def mark_processed(
     rid: int = Path(...),
@@ -281,6 +301,11 @@ def mark_processed(
             r.remind_time = next_due - ((old_due - r.remind_time) if old_due else timedelta(0))
         r.processed = False
         r.closed_reason = None
+        # 打卡历史：同一天只记一条；记下的 id 存进快照，undo 时精确回滚
+        completion = _log_completion(session, r.id, today)
+        snap = dict(r.undo_snapshot or {})
+        snap["completion_id"] = completion.id if completion else None
+        r.undo_snapshot = snap
     else:
         r.processed = True
         r.closed_reason = "done"
@@ -312,6 +337,13 @@ def undo_processed(
     snap = r.undo_snapshot
     if not snap:
         raise HTTPException(400, "nothing to undo")
+
+    # 这次完成记下的那条打卡历史一并撤掉（id 存在快照里，不会误删同日更早的那条）
+    completion_id = snap.get("completion_id")
+    if completion_id:
+        row = session.get(TodoCompletion, completion_id)
+        if row and row.todo_id == r.id:
+            session.delete(row)
 
     r.due_time = _parse_date_field(snap["due_time"]) if snap.get("due_time") else None
     r.remind_time = _parse_date_field(snap["remind_time"]) if snap.get("remind_time") else None
@@ -367,6 +399,19 @@ def snooze_todo(
     return r
 
 
+@router.get("/todos/{rid}/history", response_model=List[date])
+def todo_history(
+    rid: int = Path(...),
+    session: Session = Depends(get_todo_session),
+):
+    """循环任务的完成历史：按日期倒序返回打卡日（前端算连续/月度统计）。"""
+    return session.exec(
+        select(TodoCompletion.completed_on)
+        .where(TodoCompletion.todo_id == rid)
+        .order_by(TodoCompletion.completed_on.desc())
+    ).all()
+
+
 @router.delete("/todos/{rid}")
 def delete_todo(
     rid: int = Path(...),
@@ -378,6 +423,9 @@ def delete_todo(
     # 先取消对端任务（失败 502，不删行，防幽灵推送）
     if r.push_task_id or r.mqtt_enabled:
         _sync_cancel_or_502(session, r.id)
+    # 打卡历史跟着删，避免留下孤儿行
+    for row in session.exec(select(TodoCompletion).where(TodoCompletion.todo_id == rid)).all():
+        session.delete(row)
     session.delete(r)
     session.commit()
     return {"message": "Deleted"}

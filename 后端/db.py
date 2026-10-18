@@ -11,7 +11,7 @@ from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Liability, MindMap, Note, Todo, ServerStatus
+from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Liability, MindMap, Note, Todo, TodoCompletion, ServerStatus
 
 # ---------------------------------------------------------------------------
 # 路径：以本文件所在目录为基准，data/ 与代码同级
@@ -72,7 +72,7 @@ def make_session_getter(engine, *tables, name="session"):
 
 def init_db() -> None:
     """根据当前模型创建各业务表。"""
-    SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__])
+    SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__, TodoCompletion.__table__])
     SQLModel.metadata.create_all(bookmark_engine, tables=[Bookmark.__table__])
     SQLModel.metadata.create_all(
         server_status_engine, tables=[ServerStatus.__table__]
@@ -90,7 +90,7 @@ def init_db() -> None:
 # 各域会话依赖（routers 里直接 Depends(get_todo_session) 即可）
 # ---------------------------------------------------------------------------
 get_todo_session = make_session_getter(
-    todo_engine, Todo.__table__, name="todo"
+    todo_engine, Todo.__table__, TodoCompletion.__table__, name="todo"
 )
 get_bookmark_session = make_session_getter(
     bookmark_engine, Bookmark.__table__, name="bookmark"

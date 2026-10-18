@@ -8,16 +8,17 @@ import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import DatePicker from '@/components/DatePicker.vue'
 import PushTimePicker from '@/components/PushTimePicker.vue'
+import TodoHistory from '@/components/TodoHistory.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
 import { usePageMenu } from '@/composables/usePageMenu'
 import { formatPush, toPushInput, toPushISO } from '@/utils/pushTime'
 import {
-  CYCLE_LABELS,
   CYCLE_OPTIONS,
   PRIORITY_META,
   PRIORITY_OPTIONS,
+  cycleLabel,
   daysUntil,
   formatDate,
   parseDate,
@@ -54,6 +55,13 @@ const form = reactive({
 
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
+const historyOpen = ref(false)
+const historyTodo = ref(null)
+
+function openHistory(todo) {
+  historyTodo.value = todo
+  historyOpen.value = true
+}
 
 // 卡片操作菜单：右键 / 长按调起全局菜单；卡片上只保留完成与推迟两个明确按键。
 let pressTimer = null
@@ -63,6 +71,9 @@ function openCardMenu(todo, x, y, fromTouch = false) {
   const menuItems = [{ key: 'edit', label: '编辑', action: () => openEdit(todo) }]
   if (todo?.undo_snapshot) {
     menuItems.push({ key: 'undo', label: '撤销上一次完成', action: () => undo(todo) })
+  }
+  if (todo?.recurring) {
+    menuItems.push({ key: 'history', label: '完成历史', action: () => openHistory(todo) })
   }
   // 「取消」只在未完成时出现；取消后 processed=true + closed_reason='cancelled'，
   // 卡片上的「重开」按钮可以恢复。循环任务用它可以停掉整个循环。
@@ -178,12 +189,6 @@ function dueStatus(todo) {
   if (d === 0) return { label: '今天到期', cls: 'text-amber-300' }
   if (d === 1) return { label: '明天到期', cls: 'text-sky-300' }
   return { label: `${d} 天后 · ${formatDate(todo.due_time)}`, cls: 'text-slate-400' }
-}
-
-function cycleLabel(todo) {
-  if (!todo.recurring) return null
-  const base = CYCLE_LABELS[todo.cycle_mode] || '循环'
-  return todo.cycle_mode === 'days' ? `每 ${todo.cycle_days || 1} 天` : base
 }
 
 async function load() {
@@ -608,7 +613,16 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
                 <Icon name="share" :size="10" />
                 MQTT {{ formatPush(todo.mqtt_at) }}
               </span>
-              <span v-if="todo.last_completed_date" class="text-emerald-500/80">
+              <!-- 循环任务：点「上次完成」看打卡日历（一次性任务没有历史，保持纯文本） -->
+              <button
+                v-if="todo.last_completed_date && todo.recurring"
+                class="text-emerald-500/80 hover:text-emerald-300 underline decoration-dotted underline-offset-2 transition"
+                title="查看完成历史"
+                @click.stop="openHistory(todo)"
+              >
+                上次 {{ formatDate(todo.last_completed_date) }}
+              </button>
+              <span v-else-if="todo.last_completed_date" class="text-emerald-500/80">
                 上次 {{ formatDate(todo.last_completed_date) }}
               </span>
             </div>
@@ -783,6 +797,8 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       :message="pendingDelete ? `确定删除「${pendingDelete.title}」吗？` : ''"
       @confirm="doDelete"
     />
+
+    <TodoHistory v-model="historyOpen" :todo="historyTodo" />
 
     <!-- 卡片操作菜单由全局 ContextMenu 统一渲染（右键 / 长按） -->
   </div>
