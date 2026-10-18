@@ -171,6 +171,26 @@ export function cycleLabel(todo) {
   return todo.cycle_mode === 'days' ? `每 ${todo.cycle_days || 1} 天` : base
 }
 
+/** 提醒日期到了没（没设提醒日期 = 不限制，一直显示）。 */
+function reachedReminder(todo) {
+  if (!todo.remind_time) return true
+  return String(todo.remind_time).slice(0, 10) <= todayISO()
+}
+
+/** 该不该出现在「待处理」。
+ *
+ *  设了提醒日期就等提醒日期（tickler）；没设的话，循环任务还要等「下次该做的
+ *  日子」到——循环任务打完卡 processed 仍是 false（它要顺延到下一期），只看
+ *  processed 的话做完了也永远赖在待处理里；而打卡会把 due 顺延到未来，所以
+ *  按 due 判定，做完就自然消失、到了下一期自己回来。一次性任务一直显示。
+ */
+export function inPending(todo) {
+  if (todo.processed) return false
+  if (todo.remind_time) return reachedReminder(todo)
+  if (!todo.recurring || !todo.due_time) return true
+  return String(todo.due_time).slice(0, 10) <= todayISO()
+}
+
 export const RECORD_TYPE_META = {
   income: { label: '收入', color: 'text-emerald-400', bg: 'bg-emerald-500/15 border-emerald-400/30', sign: '+' },
   expense: { label: '支出', color: 'text-rose-400', bg: 'bg-rose-500/15 border-rose-400/30', sign: '-' },

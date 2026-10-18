@@ -1,7 +1,7 @@
 import { reactive } from 'vue'
 
 import { api } from '@/api'
-import { todayISO } from '@/utils/format'
+import { inPending, todayISO } from '@/utils/format'
 
 // 全局汇总指标单例：顶部状态胶囊 + 底部统计共用，避免重复请求。
 export const summary = reactive({
@@ -9,7 +9,6 @@ export const summary = reactive({
   liability: null,
   bookmarkTotal: 0,
   todoTotal: 0,
-  todoDone: 0,
   todoOverdue: 0,
   serverTotal: 0,
   serverUp: 0,
@@ -34,16 +33,11 @@ export async function loadSummary() {
     summary.asset = asset?.amount ?? null
     summary.liability = liability?.amount ?? null
     summary.bookmarkTotal = bookmarks.length
-    // 第一数：已到提醒日的未完成 + 未设置提醒日期的未完成；第二数：其中已逾期的
-    const reachedTodos = todos.filter((t) => {
-      if (t.processed) return false
-      if (!t.remind_time) return true
-      return String(t.remind_time).slice(0, 10) <= today
-    })
-    summary.todoTotal = reachedTodos.length
-    summary.todoDone = reachedTodos.filter((t) => t.processed).length
-    summary.todoOverdue = reachedTodos.filter(
-      (t) => !t.processed && t.due_time && String(t.due_time).split('T')[0] < today,
+    // 「待处理」与待办页签同一口径（inPending）；第二数是其中已逾期的
+    const pendingTodos = todos.filter(inPending)
+    summary.todoTotal = pendingTodos.length
+    summary.todoOverdue = pendingTodos.filter(
+      (t) => t.due_time && String(t.due_time).split('T')[0] < today,
     ).length
     summary.serverTotal = servers.length
     summary.serverUp = servers.filter((s) => s.is_success).length
