@@ -50,6 +50,9 @@ class Todo(SQLModel, table=True):
     cycle_days: Optional[int] = Field(default=None)
 
     last_completed_date: Optional[date] = Field(default=None)
+    # 循环任务最近一次「推迟」的日子；打卡和推迟都代表今天这一期不用做了，
+    # 「已完成」靠这两个日期把「动过的」和「还没到时候、也没动过」的分开。
+    last_snoozed_date: Optional[date] = Field(default=None)
 
     # 完成前的快照（供 /undo 回滚循环顺延）：{due_time, remind_time, processed, last_completed_date}
     undo_snapshot: Optional[Dict] = Field(default=None, sa_column=Column(JSON))

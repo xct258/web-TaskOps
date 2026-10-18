@@ -362,6 +362,9 @@ def snooze_todo(
 ):
     """行内推迟：循环任务顺延一个周期，一次性任务 +1 天（从 due/今天中较晚者起算）。
 
+    循环任务记下 last_snoozed_date：推迟和打卡一样代表今天这一期不用做了，
+    「已完成」页签靠它把动过的循环任务收进去。
+
     手动推迟+开 MQTT：mqtt_at 按到期日偏移平移并 upsert。
     """
     r = session.get(Todo, rid)
@@ -382,6 +385,8 @@ def snooze_todo(
             except ValueError:
                 r.mqtt_at = None
     r.due_time = next_due
+    if r.recurring:
+        r.last_snoozed_date = today
     # 同上：不设提醒日期（None）时保持不设
     if r.remind_time:
         r.remind_time = next_due - ((old_due - r.remind_time) if old_due else timedelta(0))

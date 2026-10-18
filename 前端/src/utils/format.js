@@ -177,31 +177,39 @@ function reachedReminder(todo) {
   return String(todo.remind_time).slice(0, 10) <= todayISO()
 }
 
-/** 循环任务「还没到日子」：due 已经顺延到未来，今天不用做。
- *
- *  打卡和推迟都会把 due 顺延走——打完卡是不用再做，推迟是今天不做——两者都
- *  落在这里，所以它们在「待处理」里看不到，但去「已完成」那侧找得到，不会
- *  凭空消失。逐期补做还没补完的（due 仍在过去）不算，还得留在待处理继续补。
- */
-export function notDueYet(todo) {
-  return Boolean(
-    todo.recurring &&
-      !todo.processed &&
-      todo.due_time &&
-      String(todo.due_time).slice(0, 10) > todayISO(),
-  )
+/** 到期日在今天之后。循环任务靠它区分「现在该做」和「今天不用做」。 */
+function dueLater(todo) {
+  return Boolean(todo.due_time && String(todo.due_time).slice(0, 10) > todayISO())
 }
 
-/** 该不该出现在「待处理」。
+/** 该不该出现在「待处理」= 现在就能处理的。
  *
  *  设了提醒日期就等提醒日期到了（tickler）；一次性任务到点没做就一直显示；
- *  循环任务到日子了（due <= 今天）才冒出来，没到日子的在「已完成」那侧。
+ *  循环任务到日子了（due <= 今天）才冒出来——打卡和推迟都会把 due 顺延到未来，
+ *  所以做完 / 推迟过的不在这一栏，去「已完成」那侧。
  */
 export function inPending(todo) {
   if (todo.processed) return false
   if (todo.remind_time) return reachedReminder(todo)
   if (!todo.recurring) return true
-  return !notDueYet(todo)
+  return !dueLater(todo)
+}
+
+/** 该不该出现在「已完成」的循环任务：今天不用做了（due 已顺延到未来），
+ *  而且今天确实动过——打过卡（last_completed_date）或推迟过（last_snoozed_date）。
+ *
+ *  从没动过、又还没到日子的循环任务（比如每月房租）两边都不收，留在「全部」里
+ *  等它到期；到了日子自己进「待处理」。
+ */
+export function settledToday(todo) {
+  const today = todayISO()
+  return Boolean(
+    todo.recurring &&
+      !todo.processed &&
+      dueLater(todo) &&
+      (String(todo.last_completed_date || '').slice(0, 10) === today ||
+        String(todo.last_snoozed_date || '').slice(0, 10) === today),
+  )
 }
 
 export const RECORD_TYPE_META = {
