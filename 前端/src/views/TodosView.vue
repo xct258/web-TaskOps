@@ -429,8 +429,10 @@ async function reopen(todo) {
 
 async function snooze(todo) {
   try {
-    replace(await api.todos.snooze(todo.id))
-    toast.info('已推迟一个周期')
+    const next = await api.todos.snooze(todo.id)
+    replace(next)
+    // 说清楚推到哪天：不然循环任务一推迟 due 就顺延走，容易以为任务没了
+    toast.info(next.due_time ? `已推迟到 ${formatDate(next.due_time)}` : '已推迟')
     loadSummary()
   } catch (err) {
     toast.error(`推迟失败：${err.message}`)
