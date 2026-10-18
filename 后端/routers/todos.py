@@ -120,7 +120,8 @@ def create_todo(data: Todo, session: Session = Depends(get_todo_session)):
                 data.remind_time = _parse_date_field(data.remind_time)
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid remind_time format")
-        else:
+        elif "remind_time" not in data.model_fields_set:
+            # 老客户端不带该字段时仍按到期日兜底；显式传 null = 特意不设提醒日期
             data.remind_time = data.due_time
         _normalize_cycle(data)
 
@@ -189,6 +190,9 @@ def update_todo(
                 r.remind_time = _parse_date_field(payload["remind_time"])
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid remind_time format")
+        elif "remind_time" in payload:
+            # 显式传空 = 取消提醒日期限制（不再回退成到期日）
+            r.remind_time = None
         elif "due_time" in payload or not r.remind_time:
             r.remind_time = r.due_time
         if "cycle_mode" in payload:
@@ -271,8 +275,10 @@ def mark_processed(
             except ValueError:
                 r.mqtt_at = None
         r.due_time = next_due
-        reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
-        r.remind_time = next_due - reminder_offset
+        # 提醒日期随到期日同步平移；None 表示「不设」，要保持 None，
+        # 否则会被「偏移 0」兜底成到期当天，把这个状态弄丢。
+        if r.remind_time:
+            r.remind_time = next_due - ((old_due - r.remind_time) if old_due else timedelta(0))
         r.processed = False
         r.closed_reason = None
     else:
@@ -348,8 +354,9 @@ def snooze_todo(
             except ValueError:
                 r.mqtt_at = None
     r.due_time = next_due
-    reminder_offset = (old_due - r.remind_time) if old_due and r.remind_time else timedelta(0)
-    r.remind_time = next_due - reminder_offset
+    # 同上：不设提醒日期（None）时保持不设
+    if r.remind_time:
+        r.remind_time = next_due - ((old_due - r.remind_time) if old_due else timedelta(0))
 
     # 手动推迟需同步新的推送排期。
     if r.mqtt_enabled and r.mqtt_at:

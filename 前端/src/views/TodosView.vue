@@ -1,5 +1,5 @@
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, reactive, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, reactive, ref, watch } from 'vue'
 
 import { api } from '@/api'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
@@ -21,6 +21,7 @@ import {
   daysUntil,
   formatDate,
   parseDate,
+  shiftDate,
   todayISO,
 } from '@/utils/format'
 
@@ -202,13 +203,87 @@ function replace(updated) {
   loadSummary()
 }
 
+/* ------------------------- 提醒日期快捷选项 ------------------------- */
+// 「提醒日期」默认为空 = 不限制，任务随时出现在「待处理」里。
+// 选了到期日期之后，用相对它的快捷项来设：当天 / 提前 N 天 / 自定义。
+const REMIND_PRESETS = [
+  { key: 'same', label: '当天', offset: 0 },
+  { key: 'd3', label: '提前 3 天', offset: 3 },
+  { key: 'd7', label: '提前 7 天', offset: 7 },
+]
+// '' = 不设；same/d3/d7 = 相对到期日期；custom = 自己挑日期
+const remindPreset = ref('')
+
+const remindOffsetDays = (due, remind) => Math.round((parseDate(due) - parseDate(remind)) / 86400000)
+
+const remindChipClass = (key) =>
+  remindPreset.value === key
+    ? 'bg-sky-600 text-white border-sky-400/40'
+    : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
+
+function applyPreset(preset) {
+  // 再点一次同一个 = 取消设置，回到「不设提醒日期」
+  if (remindPreset.value === preset.key) {
+    remindPreset.value = ''
+    form.remind_time = ''
+    return
+  }
+  remindPreset.value = preset.key
+  form.remind_time = shiftDate(form.due_time, -preset.offset)
+}
+
+function pickCustomRemind() {
+  remindPreset.value = 'custom'
+  // 给个起点，否则日历会停在当前月、且看不出原来选的是哪天
+  if (!form.remind_time) form.remind_time = form.due_time
+}
+
+function deriveRemindPreset(remind, due) {
+  if (!remind) return ''
+  if (!due) return 'custom'
+  const offset = remindOffsetDays(due, remind)
+  return REMIND_PRESETS.find((p) => p.offset === offset)?.key ?? 'custom'
+}
+
+// 到期日期变了，相对型的快捷项要跟着挪，否则还停在旧的绝对日期上
+watch(
+  () => form.due_time,
+  (due) => {
+    const preset = REMIND_PRESETS.find((p) => p.key === remindPreset.value)
+    if (!due) {
+      remindPreset.value = ''
+      form.remind_time = ''
+    } else if (preset) {
+      form.remind_time = shiftDate(due, -preset.offset)
+    }
+  },
+)
+
+// 自定义日历里点了「清除」= 回到「不设」，别让「自定义」一直亮着
+watch(
+  () => form.remind_time,
+  (remind) => {
+    if (!remind && remindPreset.value === 'custom') remindPreset.value = ''
+  },
+)
+
+const remindHint = computed(() => {
+  if (!form.remind_time) return '不设提醒日期：一直显示在「待处理」里'
+  const label = formatDate(form.remind_time)
+  if (!form.due_time) return label
+  const days = remindOffsetDays(form.due_time, form.remind_time)
+  if (days === 0) return `${label}（到期当天）`
+  if (days > 0) return `${label}（到期前 ${days} 天）`
+  return `${label}（到期后 ${-days} 天）`
+})
+
 function openAdd() {
   editing.value = null
   Object.assign(form, {
     title: '',
     content: '',
     due_time: todayISO(),
-    remind_time: todayISO(),
+    remind_time: '',
     priority: 0,
     cycle_mode: '',
     cycle_days: 7,
@@ -216,16 +291,19 @@ function openAdd() {
     mqtt_enabled: false,
     mqtt_at: '',
   })
+  remindPreset.value = ''
   modalOpen.value = true
 }
 
 function openEdit(todo) {
   editing.value = todo
+  const due = String(todo.due_time || todayISO()).slice(0, 10)
+  const remind = todo.remind_time ? String(todo.remind_time).slice(0, 10) : ''
   Object.assign(form, {
     title: todo.title,
     content: todo.content,
-    due_time: String(todo.due_time || todayISO()).slice(0, 10),
-    remind_time: String(todo.remind_time || todo.due_time || todayISO()).slice(0, 10),
+    due_time: due,
+    remind_time: remind,
     priority: todo.priority ?? 0,
     cycle_mode: todo.recurring ? todo.cycle_mode || '' : '',
     cycle_days: todo.cycle_days || 7,
@@ -233,6 +311,7 @@ function openEdit(todo) {
     mqtt_enabled: !!todo.mqtt_enabled,
     mqtt_at: toPushInput(todo.mqtt_at),
   })
+  remindPreset.value = deriveRemindPreset(remind, due)
   modalOpen.value = true
 }
 
@@ -577,15 +656,38 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <textarea v-model="form.content" :class="inputClass" rows="2" placeholder="主卧电表，户号 123456" />
         </div>
 
-        <div class="grid grid-cols-2 gap-2.5">
-          <div>
-            <label :class="labelClass">到期日期</label>
-            <DatePicker v-model="form.due_time" />
+        <div>
+          <label :class="labelClass">到期日期</label>
+          <DatePicker v-model="form.due_time" />
+        </div>
+
+        <!-- 提醒日期默认留空（= 不受提醒日期限制）；设了到期日期才给相对于它的快捷项 -->
+        <div v-if="form.due_time">
+          <label :class="labelClass">提醒日期</label>
+          <div class="flex flex-wrap gap-1.5">
+            <button
+              v-for="preset in REMIND_PRESETS"
+              :key="preset.key"
+              type="button"
+              class="px-2.5 py-1 rounded-xl text-[11px] font-mono whitespace-nowrap border transition"
+              :class="remindChipClass(preset.key)"
+              @click="applyPreset(preset)"
+            >
+              {{ preset.label }}
+            </button>
+            <button
+              type="button"
+              class="px-2.5 py-1 rounded-xl text-[11px] font-mono whitespace-nowrap border transition"
+              :class="remindChipClass('custom')"
+              @click="pickCustomRemind"
+            >
+              自定义
+            </button>
           </div>
-          <div>
-            <label :class="labelClass">提醒日期</label>
+          <div v-if="remindPreset === 'custom'" class="mt-1.5">
             <DatePicker v-model="form.remind_time" />
           </div>
+          <p class="mt-1 text-[10px] text-slate-500">{{ remindHint }}</p>
         </div>
 
         <div class="grid grid-cols-2 gap-2.5">
