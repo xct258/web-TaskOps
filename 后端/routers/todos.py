@@ -121,9 +121,6 @@ def create_todo(data: Todo, session: Session = Depends(get_todo_session)):
                 data.remind_time = _parse_date_field(data.remind_time)
             except Exception:
                 raise HTTPException(status_code=400, detail="Invalid remind_time format")
-        elif "remind_time" not in data.model_fields_set:
-            # 老客户端不带该字段时仍按到期日兜底；显式传 null = 特意不设提醒日期
-            data.remind_time = data.due_time
         _normalize_cycle(data)
 
     data.mqtt_enabled = bool(data.mqtt_enabled)
@@ -186,16 +183,15 @@ def update_todo(
         else:
             r.due_time = None
     if r.due_time:
-        if "remind_time" in payload and payload["remind_time"]:
-            try:
-                r.remind_time = _parse_date_field(payload["remind_time"])
-            except Exception:
-                raise HTTPException(status_code=400, detail="Invalid remind_time format")
-        elif "remind_time" in payload:
-            # 显式传空 = 取消提醒日期限制（不再回退成到期日）
-            r.remind_time = None
-        elif "due_time" in payload or not r.remind_time:
-            r.remind_time = r.due_time
+        # 提醒日期只认显式传来的值：没传就不动，传空就是「不设提醒」。
+        if "remind_time" in payload:
+            if payload["remind_time"]:
+                try:
+                    r.remind_time = _parse_date_field(payload["remind_time"])
+                except Exception:
+                    raise HTTPException(status_code=400, detail="Invalid remind_time format")
+            else:
+                r.remind_time = None
         if "cycle_mode" in payload:
             _normalize_cycle(r)
         elif r.recurring and not r.cycle_mode:
