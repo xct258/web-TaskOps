@@ -182,15 +182,18 @@ function dueLater(todo) {
   return Boolean(todo.due_time && String(todo.due_time).slice(0, 10) > todayISO())
 }
 
-/** 该不该出现在「待处理」= 时间到了、现在就该处理的。
+/** 该不该出现在「待处理」= 现在就能处理的。
  *
- *  提醒日期管「什么时候开始提醒」，到期日管「什么时候该做」，两个都没到就先
- *  别冒出来（去「未到期」那栏等着），到了日子自己进待处理。
- *  循环任务打卡 / 推迟后 due 被顺延到未来，于是也自动离开待处理。
+ *  提醒日期是 tickler：设了就等那天才冒出来（之前先在「未到期」待着）；
+ *  一次性任务没设提醒就一直显示（到期日只是死线，提前做也行）；
+ *  循环任务没设提醒则按节奏来——到该做的日子（due <= 今天）才出来，
+ *  打卡 / 推迟会把 due 顺延到未来，于是自动离开待处理。
  */
 export function inPending(todo) {
   if (todo.processed) return false
-  if (todo.remind_time && !reachedReminder(todo)) return false
+  if (settledToday(todo)) return false
+  if (todo.remind_time) return reachedReminder(todo)
+  if (!todo.recurring) return true
   return !dueLater(todo)
 }
 
@@ -209,8 +212,8 @@ export function settledToday(todo) {
   )
 }
 
-/** 该不该出现在「未到期」= 时间还没到：提醒日期 / 到期日还没到，今天也没动过。
- *  另外几栏都不收的那些——给它一个明确的家，至少不会漏。
+/** 该不该出现在「未到期」= 时间还没到：设了提醒日期、但提醒日还没到；
+ *  或者循环任务还没到该做的日子。也就是"待处理 / 已完成 / 已取消"都不收的那些。
  */
 export function waiting(todo) {
   return !todo.processed && !inPending(todo) && !settledToday(todo)

@@ -222,7 +222,8 @@ function replace(updated) {
 }
 
 /* ------------------------- 提醒日期快捷选项 ------------------------- */
-// 「提醒日期」默认为空 = 不设 tickler，按到期日进「待处理」（没到期日前在「未到期」）。
+// 「提醒日期」默认为空 = 不设 tickler（一次性任务一直显示在「待处理」里，
+// 循环任务到该做的日子才进）。设了就是到那天才冒出来，之前待在「未到期」。
 // 选了到期日期之后，用相对它的快捷项来设：当天 / 提前 N 天 / 自定义。
 const REMIND_PRESETS = [
   { key: 'same', label: '当天', offset: 0 },
@@ -289,9 +290,10 @@ watch(
 
 const remindHint = computed(() => {
   if (!form.remind_time) {
-    return form.due_time
-      ? '不设提醒日期：到到期日才进「待处理」，之前都在「未到期」里'
-      : '不设提醒日期、也不设到期日：一直显示在「待处理」里'
+    // 提醒日期是唯一的"晚点再冒出来"开关：不设就按任务自己的节奏显示
+    return form.cycle_mode && form.cycle_mode !== 'none'
+      ? '不设提醒日期：到该做的日子才进「待处理」'
+      : '不设提醒日期：一直显示在「待处理」里'
   }
   const label = formatDate(form.remind_time)
   if (!form.due_time) return label
