@@ -134,15 +134,8 @@ const FILTERS = [
   { key: 'all', label: '全部' },
 ]
 
-const stats = computed(() => {
-  // 与列表同一口径：时间到了才进待处理，没到时间的在「未到期」等着
-  const pending = items.value.filter(inPending).length
-  const later = items.value.filter(waiting).length
-  // 已取消同样是 processed=true，只能靠 closed_reason 区分，
-  // 否则「已完成」会把取消的任务也算进去、两个页签的数字互相串。
-  const cancelled = items.value.filter((t) => t.processed && t.closed_reason === 'cancelled').length
-  return { pending, later, cancelled }
-})
+// 只有「待处理」带数字角标，其他页签干净点
+const pendingCount = computed(() => items.value.filter(inPending).length)
 
 function matchesFilter(todo, key) {
   const today = todayISO()
@@ -528,9 +521,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           @click="filter = f.key"
         >
           {{ f.label }}
-          <span v-if="f.key === 'pending'" class="opacity-70">{{ stats.pending }}</span>
-          <span v-else-if="f.key === 'later'" class="opacity-70">{{ stats.later }}</span>
-          <span v-else-if="f.key === 'cancelled' && stats.cancelled" class="text-amber-300 font-bold bg-amber-500/10 px-1 rounded">{{ stats.cancelled }}</span>
+          <span v-if="f.key === 'pending'" class="opacity-70">{{ pendingCount }}</span>
         </button>
       </div>
 
