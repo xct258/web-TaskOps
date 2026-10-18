@@ -54,7 +54,12 @@ const chipClass = (value, highlight = false) => [
   highlight || props.active === value ? tone.value.active : tone.value.idle,
 ]
 
-const tagsAreaEl = ref(null)
+/* 测量用：整行的可用宽度（rowEl 是 flex-1 min-w-0，宽度由工具栏决定，与内容无关），
+ * 减去「全部」、插槽按钮和「更多」占的位置，剩下的才是标签能用的。 */
+const rowEl = ref(null)
+const allChipEl = ref(null)
+const slotEl = ref(null)
+const moreMirrorEl = ref(null) // 「更多」宽度的量取副本（真实按钮可能还没渲染）
 const measureTagEls = [] // 镜像行里各标签的 DOM，只用于量宽度
 const visibleCount = ref(0)
 const moreOpen = ref(false)
@@ -67,24 +72,35 @@ const hiddenTags = computed(() => props.tags.slice(visibleCount.value))
 const moreActive = computed(() => hiddenTags.value.includes(props.active))
 
 function measure() {
-  const area = tagsAreaEl.value
-  if (!area) return
+  const row = rowEl.value
+  if (!row) return
   if (!props.tags.length) {
     visibleCount.value = 0
     return
   }
   // 间距直接读计算样式，免得和 size 里的 gap 类写死对不上
-  const gap = parseFloat(getComputedStyle(area).columnGap) || 0
-  const avail = area.clientWidth - 4 // 留 4px 取整余量：宁可少放一个，也不裁出半个标签
-  let used = 0
-  let count = 0
-  for (let i = 0; i < props.tags.length; i += 1) {
-    const width = measureTagEls[i]?.getBoundingClientRect().width ?? 0
-    const add = count === 0 ? width : gap + width
-    if (used + add > avail) break
-    used += add
-    count += 1
+  const gap = parseFloat(getComputedStyle(row).columnGap) || 0
+  const width = (el) => el?.getBoundingClientRect().width ?? 0
+  const widths = props.tags.map((_, i) => width(measureTagEls[i]))
+
+  // 除标签外都固定不动：全部 + 一个 gap + 插槽（未分类之类，空则宽 0）
+  const base = width(allChipEl.value) + gap + width(slotEl.value)
+  // 2px 取整余量：宁可少放一个，也不裁出半个标签
+  const budgetNoMore = row.clientWidth - base - 2
+  const budgetWithMore = budgetNoMore - (gap + width(moreMirrorEl.value))
+
+  const countIn = (budget) => {
+    let used = 0
+    let count = 0
+    while (count < widths.length && used + gap + widths[count] <= budget) {
+      used += gap + widths[count]
+      count += 1
+    }
+    return count
   }
+
+  let count = countIn(budgetNoMore)
+  if (count < widths.length) count = countIn(budgetWithMore) // 放不下 → 要给「更多」腾位置，重算
   visibleCount.value = count
 }
 
@@ -105,9 +121,11 @@ onMounted(() => {
   document.addEventListener('click', onOutside)
   document.addEventListener('keydown', onKeydown)
   nextTick(measure)
-  // 容器宽度变化（窗口缩放 / 右侧按钮增减）后重算；放 rAF 里避免 ResizeObserver 同帧反复回调
+  // 宽度变化就重算：整行（窗口缩放 / 右侧按钮增减）+ 插槽（「未分类」出现或消失）。
+  // 放 rAF 里避免 ResizeObserver 同帧反复回调。
   observer = new ResizeObserver(() => requestAnimationFrame(measure))
-  if (tagsAreaEl.value) observer.observe(tagsAreaEl.value)
+  if (rowEl.value) observer.observe(rowEl.value)
+  if (slotEl.value) observer.observe(slotEl.value)
 })
 onUnmounted(() => {
   document.removeEventListener('click', onOutside)
@@ -119,8 +137,8 @@ watch(() => props.tags, () => nextTick(measure))
 </script>
 
 <template>
-  <div class="flex items-center font-mono" :class="skin.root">
-    <!-- 量宽镜像行：不可见、不占位、不响应交互，只为 measure() 提供标签真实宽度。
+  <div ref="rowEl" class="flex items-center min-w-0 font-mono" :class="skin.root">
+    <!-- 量宽镜像行：不可见、不占位、不响应交互，只为 measure() 提供各元素真实宽度。
          width:max-content 必须有，否则绝对定位元素按 shrink-to-fit 收缩，量出来的宽度会偏小。 -->
     <div
       aria-hidden="true"
@@ -137,21 +155,22 @@ watch(() => props.tags, () => nextTick(measure))
       >
         {{ tag }}
       </button>
+      <button ref="moreMirrorEl" class="whitespace-nowrap border border-white/5 flex-shrink-0" :class="skin.chip">
+        更多 ▾
+      </button>
     </div>
 
-    <button :class="chipClass('ALL')" @click="select('ALL')">{{ allLabel }}</button>
+    <button ref="allChipEl" :class="chipClass('ALL')" @click="select('ALL')">{{ allLabel }}</button>
 
-    <!-- 可见标签区：flex-1 吸收压缩，多余部分裁掉（裁多少由 measure() 决定） -->
-    <div ref="tagsAreaEl" class="flex-1 min-w-0 flex items-center overflow-hidden" :class="skin.root">
+    <!-- 可见标签区：不设 flex-1，宽度就是这几个标签的总宽，这样「更多」紧跟在最后一个标签后面；
+         万一算错也只是这里被裁剪，不会压到右侧的搜索/新建按钮（其余子项都是 flex-shrink-0）。 -->
+    <div class="min-w-0 flex items-center overflow-hidden" :class="skin.root">
       <button v-for="tag in visibleTags" :key="tag" :class="chipClass(tag)" @click="select(tag)">
         {{ tag }}
       </button>
     </div>
 
-    <!-- 额外筛选按钮（如书签页的「未分类」）：复用同一套 chip 样式，避免各页各写一份 -->
-    <slot :chip-class="chipClass" />
-
-    <!-- 折叠入口：放在裁切区之外，浮层才不会被 overflow-hidden 剪掉 -->
+    <!-- 折叠入口：紧跟最后一个标签，而不是被顶到行尾（贴着搜索框） -->
     <div v-if="hiddenTags.length" ref="moreWrap" class="relative flex-shrink-0">
       <button
         :class="chipClass('', moreActive)"
@@ -175,6 +194,12 @@ watch(() => props.tags, () => nextTick(measure))
         </button>
       </div>
     </div>
+
+    <!-- 额外筛选按钮（如书签页的「未分类」）：复用同一套 chip 样式。
+         空插槽宽度为 0，测宽时按 0 计入。 -->
+    <span ref="slotEl" class="flex items-center flex-shrink-0" :class="skin.root">
+      <slot :chip-class="chipClass" />
+    </span>
   </div>
 </template>
 
