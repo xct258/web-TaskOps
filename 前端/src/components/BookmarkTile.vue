@@ -1,11 +1,18 @@
 <script setup>
 import { computed, ref } from 'vue'
-import { gradientFor, initials, tagColor } from '@/utils/format'
+import { firstChar, gradientFor, tagColor } from '@/utils/format'
 
 const props = defineProps({ bookmark: { type: Object, required: true } })
 const emit = defineEmits(['open', 'ctx'])
 
-const firstTag = computed(() => (props.bookmark.tags || [])[0])
+const MAX_TAGS = 2
+
+const tags = computed(() => props.bookmark.tags || [])
+// 卡片窄（xl 下每格约 200px，留给正文的只有 130~160px）：只渲染前 MAX_TAGS 个，
+// 其余折成 "+N"，悬停 title 看全部。标签用 min-w-0 + truncate 优雅省略，
+// 不要再让 flex 子项按 min-width:auto 撑开后被外层 overflow-hidden 硬裁。
+const visibleTags = computed(() => tags.value.slice(0, MAX_TAGS))
+const hiddenTagCount = computed(() => Math.max(0, tags.value.length - MAX_TAGS))
 
 const pressTimer = ref(null)
 let pressFired = false
@@ -69,35 +76,36 @@ function guardClick(e) {
       class="w-7 h-7 rounded-lg bg-gradient-to-br flex items-center justify-center text-white font-mono text-[10px] font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
       :class="gradientFor(bookmark.title)"
     >
-       {{ initials(bookmark.title) }}
-     </div>
-       <span
-        v-if="firstTag"
-        class="absolute top-1 right-1 text-[8px] px-1 py-0 rounded border opacity-80"
-        :class="tagColor(firstTag)"
-        :title="firstTag"
-        >{{ firstTag }}</span>
-      <div class="overflow-hidden flex-1 min-w-0">
-        <div
-          class="text-[11px] font-semibold text-slate-200 group-hover/item:text-white truncate leading-tight"
-          :title="bookmark.title"
-        >
-          {{ bookmark.title }}
-        </div>
-        <div class="text-[9px] text-slate-400/90 truncate leading-tight">
-          {{ bookmark.description || bookmark.url }}
-        </div>
-        <div
-          v-if="(bookmark.tags || []).length"
-          class="flex items-center gap-0.5 mt-0.5 overflow-hidden"
-        >
+      {{ firstChar(bookmark.title) }}
+    </div>
+    <div class="overflow-hidden flex-1 min-w-0">
+      <div
+        class="text-[11px] font-semibold text-slate-200 group-hover/item:text-white truncate leading-tight"
+        :title="bookmark.title"
+      >
+        {{ bookmark.title }}
+      </div>
+      <div class="text-[9px] text-slate-400/90 truncate leading-tight">
+        {{ bookmark.description || bookmark.url }}
+      </div>
+      <div
+        v-if="tags.length"
+        class="flex items-center gap-0.5 mt-0.5 min-w-0"
+        :title="tags.join(' · ')"
+      >
         <span
-          v-for="t in bookmark.tags.slice(0, 2)"
+          v-for="t in visibleTags"
           :key="t"
-          class="text-[9px] px-1 py-0 rounded-md border whitespace-nowrap truncate"
+          class="text-[9px] px-1 py-0 rounded-md border whitespace-nowrap truncate min-w-0"
           :class="tagColor(t)"
         >
           {{ t }}
+        </span>
+        <span
+          v-if="hiddenTagCount"
+          class="text-[9px] px-1 py-0 rounded-md border border-white/10 text-slate-400 whitespace-nowrap shrink-0"
+        >
+          +{{ hiddenTagCount }}
         </span>
       </div>
     </div>

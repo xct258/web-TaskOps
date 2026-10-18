@@ -26,14 +26,11 @@ export function gradientFor(text = '') {
   return GRADIENTS[hash % GRADIENTS.length]
 }
 
-/** 取标题缩写作为徽章文字（2 个字符，中文取前两个，英文取首字母组合）。 */
-export function initials(title = '') {
-  const t = title.trim()
+/** 取首个字符作为徽章文字（按码点切分，emoji 不会被截成半个）。 */
+export function firstChar(title = '') {
+  const t = String(title).trim()
   if (!t) return '?'
-  if (/[\u4e00-\u9fa5]/.test(t)) return t.slice(0, 2)
-  const words = t.split(/[\s._-]+/).filter(Boolean)
-  if (words.length >= 2) return (words[0][0] + words[1][0]).toUpperCase()
-  return t.slice(0, 2).toUpperCase()
+  return [...t][0].toUpperCase()
 }
 
 /* --------------------------- 金额 / 数字 --------------------------- */
