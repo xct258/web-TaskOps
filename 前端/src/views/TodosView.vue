@@ -569,7 +569,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         <div
           v-for="todo in visible"
           :key="todo.id"
-          class="group relative flex items-start gap-2.5 p-3 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 border border-white/10 transition-all"
+          class="group relative flex items-center gap-2.5 p-3 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 border border-white/10 transition-all"
           :class="{
             'hover:border-rose-400/40':
               !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < todayISO(),
