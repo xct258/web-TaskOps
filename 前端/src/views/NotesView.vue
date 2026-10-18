@@ -5,6 +5,7 @@ import { api } from '@/api'
 import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
+import TagFilterBar from '@/components/TagFilterBar.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -299,24 +300,16 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         </button>
       </div>
 
-      <div v-if="allTags.length" class="flex-shrink-0 flex items-center gap-1 overflow-x-auto no-scrollbar pb-1.5 mb-1 text-[11px] font-mono">
-        <button
-          class="px-2 py-0.5 rounded-lg whitespace-nowrap border transition-all"
-          :class="activeTag === 'ALL' ? 'bg-violet-600 text-white border-violet-400/40' : 'bg-white/5 text-slate-400 border-white/5'"
-          @click="activeTag = 'ALL'"
-        >
-          全部
-        </button>
-        <button
-          v-for="tag in allTags"
-          :key="tag"
-          class="px-2 py-0.5 rounded-lg whitespace-nowrap border transition-all"
-          :class="activeTag === tag ? 'bg-violet-600 text-white border-violet-400/40' : 'bg-white/5 text-slate-400 border-white/5'"
-          @click="activeTag = tag"
-        >
-          {{ tag }}
-        </button>
-      </div>
+      <!-- 标签过滤：放不下的收进「更多 ▾」（与书签页同一个组件，样式一致） -->
+      <TagFilterBar
+        v-if="allTags.length"
+        class="flex-shrink-0 mb-1"
+        :tags="allTags"
+        :active="activeTag"
+        accent="violet"
+        size="sm"
+        @select="activeTag = $event"
+      />
 
       <div class="flex-1 min-h-0 overflow-y-auto custom-scroll pr-1">
         <div v-if="loading" class="h-full min-h-[8rem] flex items-center justify-center text-slate-500 font-mono text-xs">加载中…</div>

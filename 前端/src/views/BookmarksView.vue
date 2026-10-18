@@ -7,6 +7,7 @@ import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import BookmarkTile from '@/components/BookmarkTile.vue'
+import TagFilterBar from '@/components/TagFilterBar.vue'
 import { useToast } from '@/composables/useToast'
 import { loadSummary } from '@/composables/useSummary'
 import { useContextMenu } from '@/composables/useContextMenu'
@@ -268,45 +269,21 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
   <div class="h-full flex flex-col min-h-0">
     <!-- 工具条：标签 + 搜索 + 新建同一行 -->
     <div class="flex-shrink-0 flex items-center gap-2 mb-2">
-      <!-- 标签过滤 -->
-      <div class="flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar text-xs font-mono">
-        <button
-          class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
-          :class="
-            activeTag === 'ALL'
-              ? 'bg-indigo-600 text-white border-indigo-400/40'
-              : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-          "
-          @click="setTag('ALL')"
-        >
-          全部书签
-        </button>
-        <button
-          v-for="tag in allTags"
-          :key="tag"
-          class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
-          :class="
-            activeTag === tag
-              ? 'bg-indigo-600 text-white border-indigo-400/40'
-              : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-          "
-          @click="setTag(tag)"
-        >
-          {{ tag }}
-        </button>
-        <button
-          v-if="untaggedCount"
-          class="px-3 py-1 rounded-xl whitespace-nowrap border transition-all"
-          :class="
-            activeTag === '__untagged__'
-              ? 'bg-indigo-600 text-white border-indigo-400/40'
-              : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5'
-          "
-          @click="setTag('__untagged__')"
-        >
-          未分类
-        </button>
-      </div>
+      <!-- 标签过滤：放不下的收进「更多 ▾」，具体几个由 TagFilterBar 按容器宽度折算 -->
+      <TagFilterBar
+        class="flex-1 min-w-0"
+        :tags="allTags"
+        :active="activeTag"
+        all-label="全部书签"
+        accent="indigo"
+        @select="setTag"
+      >
+        <template #default="{ chipClass }">
+          <button v-if="untaggedCount" :class="chipClass('__untagged__')" @click="setTag('__untagged__')">
+            未分类
+          </button>
+        </template>
+      </TagFilterBar>
 
       <div class="flex items-center gap-1.5 flex-shrink-0">
         <button
