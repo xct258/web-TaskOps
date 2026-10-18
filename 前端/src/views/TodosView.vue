@@ -63,6 +63,11 @@ function openCardMenu(todo, x, y, fromTouch = false) {
   if (todo?.undo_snapshot) {
     menuItems.push({ key: 'undo', label: '撤销上一次完成', action: () => undo(todo) })
   }
+  // 「取消」只在未完成时出现；取消后 processed=true + closed_reason='cancelled'，
+  // 卡片上的「重开」按钮可以恢复。循环任务用它可以停掉整个循环。
+  if (todo && !todo.processed) {
+    menuItems.push({ key: 'cancel', label: '取消任务', action: () => cancelTodo(todo) })
+  }
   menuItems.push({ key: 'delete', label: '删除', danger: true, action: () => askDelete(todo) })
   menu.open(menuItems, x, y, { title: todo?.content, fromTouch })
 }
@@ -109,6 +114,7 @@ const labelClass = 'block text-slate-400 mb-1'
 const FILTERS = [
   { key: 'pending', label: '待处理' },
   { key: 'done', label: '已完成' },
+  { key: 'cancelled', label: '已取消' },
   { key: 'all', label: '全部' },
 ]
 
@@ -116,13 +122,17 @@ const stats = computed(() => {
   const today = todayISO()
   const reached = items.value.filter((t) => reachedReminder(t))
   const total = reached.length
-  const done = reached.filter((t) => t.processed).length
+  // 已取消同样是 processed=true，只能靠 closed_reason 区分，
+  // 否则「已完成」会把取消的任务也算进去、两个页签的数字互相串。
+  const cancelled = items.value.filter((t) => t.processed && t.closed_reason === 'cancelled').length
+  const done = reached.filter((t) => t.processed && t.closed_reason !== 'cancelled').length
+  const pending = reached.filter((t) => !t.processed).length
   const overdue = reached.filter((t) => {
     if (t.processed || !t.due_time) return false
     // 已逾期 = 到期日 < 今天（只是到了提醒日的不算逾期）
     return String(t.due_time).split('T')[0] < today
   }).length
-  return { total, done, pending: total - done, overdue }
+  return { total, done, cancelled, pending, overdue }
 })
 
 function reachedReminder(t) {
@@ -133,7 +143,9 @@ function reachedReminder(t) {
 function matchesFilter(todo, key) {
   const today = todayISO()
   if (key === 'all') return true
-  if (key === 'done') return todo.processed
+  // 取消的任务也是 processed=true，靠 closed_reason 区分，别混进「已完成」
+  if (key === 'done') return todo.processed && todo.closed_reason !== 'cancelled'
+  if (key === 'cancelled') return todo.processed && todo.closed_reason === 'cancelled'
   if (key === 'pending') return !todo.processed
   if (key === 'overdue') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < today
   if (key === 'today') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) === today
@@ -143,7 +155,9 @@ function matchesFilter(todo, key) {
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase()
   return items.value
-    .filter((t) => filter.value === 'all' || reachedReminder(t))
+    // 提醒日期只约束「待处理」：提醒日期没到的先不冒出来（tickler 式）。
+    // 「已完成 / 已取消」不再受它限制，否则提前完成或取消的任务会凭空消失。
+    .filter((t) => filter.value !== 'pending' || reachedReminder(t))
     .filter((t) => matchesFilter(t, filter.value))
     .filter((t) => !q || [t.title, t.content].filter(Boolean).some((f) => String(f).toLowerCase().includes(q)))
     .sort((a, b) => {
@@ -288,6 +302,16 @@ async function complete(todo) {
   }
 }
 
+async function cancelTodo(todo) {
+  try {
+    replace(await api.todos.update(todo.id, { processed: true, closed_reason: 'cancelled' }))
+    toast.info('已取消，可在「已取消」页签里重开')
+    loadSummary()
+  } catch (err) {
+    toast.error(`取消失败：${err.message}`)
+  }
+}
+
 async function undo(todo) {
   try {
     replace(await api.todos.undo(todo.id))
@@ -380,7 +404,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       <div
         class="min-w-0 flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar overscroll-x-contain snap-x snap-mandatory pb-1 text-xs font-mono"
         role="tablist"
-        aria-label="待办时间筛选"
+        aria-label="待办状态筛选"
       >
         <button
           v-for="f in FILTERS"
@@ -397,7 +421,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         >
           {{ f.label }}
           <span v-if="f.key === 'pending'" class="opacity-70">{{ stats.pending }}</span>
-          <span v-else-if="f.key === 'overdue' && stats.overdue" class="text-rose-400 font-bold bg-rose-500/10 px-1 rounded">{{ stats.overdue }}</span>
+          <span v-else-if="f.key === 'cancelled' && stats.cancelled" class="text-amber-300 font-bold bg-amber-500/10 px-1 rounded">{{ stats.cancelled }}</span>
         </button>
       </div>
 
