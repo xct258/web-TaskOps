@@ -251,8 +251,10 @@ watch(
   (due) => {
     const preset = REMIND_PRESETS.find((p) => p.key === remindPreset.value)
     if (!due) {
+      // 没有到期日期就没有「相对于它」的提醒日期，循环也配不了（后端也会强制关掉）
       remindPreset.value = ''
       form.remind_time = ''
+      form.cycle_mode = ''
     } else if (preset) {
       form.remind_time = shiftDate(due, -preset.offset)
     }
@@ -282,7 +284,7 @@ function openAdd() {
   Object.assign(form, {
     title: '',
     content: '',
-    due_time: todayISO(),
+    due_time: '',
     remind_time: '',
     priority: 0,
     cycle_mode: '',
@@ -297,7 +299,7 @@ function openAdd() {
 
 function openEdit(todo) {
   editing.value = todo
-  const due = String(todo.due_time || todayISO()).slice(0, 10)
+  const due = todo.due_time ? String(todo.due_time).slice(0, 10) : ''
   const remind = todo.remind_time ? String(todo.remind_time).slice(0, 10) : ''
   Object.assign(form, {
     title: todo.title,
@@ -318,7 +320,8 @@ function openEdit(todo) {
 function toggleMqtt() {
   form.mqtt_enabled = !form.mqtt_enabled
   if (form.mqtt_enabled && !form.mqtt_at) {
-    const date = form.remind_time || form.due_time
+    // 两个日期都可以不设，兜底用今天，免得推送时间留空还要用户手挑
+    const date = form.remind_time || form.due_time || todayISO()
     form.mqtt_at = date ? toPushISO(`${date}T09:00`) : ''
   }
 }
@@ -657,8 +660,8 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         </div>
 
         <div>
-          <label :class="labelClass">到期日期</label>
-          <DatePicker v-model="form.due_time" />
+          <label :class="labelClass">到期日期 <span class="text-slate-500">（可选）</span></label>
+          <DatePicker v-model="form.due_time" placeholder="不设到期日期" />
         </div>
 
         <!-- 提醒日期默认留空（= 不受提醒日期限制）；设了到期日期才给相对于它的快捷项 -->
@@ -698,8 +701,16 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
             </select>
           </div>
           <div>
-            <label :class="labelClass">循环</label>
-            <select v-model="form.cycle_mode" :class="inputClass">
+            <label :class="labelClass">
+              循环
+              <span v-if="!form.due_time" class="text-slate-500">（需先设到期日期）</span>
+            </label>
+            <select
+              v-model="form.cycle_mode"
+              :class="[inputClass, form.due_time ? '' : 'opacity-40 cursor-not-allowed']"
+              :disabled="!form.due_time"
+              :title="form.due_time ? '' : '设了到期日期才能配置循环'"
+            >
               <option v-for="opt in CYCLE_OPTIONS" :key="opt.value" :value="opt.value">{{ opt.label }}</option>
             </select>
           </div>
