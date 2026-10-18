@@ -185,6 +185,20 @@ function dueStatus(todo) {
   if (!todo.due_time) return null
   if (todo.processed) return { label: `到期 ${formatDate(todo.due_time)}`, cls: 'text-slate-500' }
   const d = daysUntil(todo.due_time)
+  // 循环任务没有「死线」：due_time 是「下一次该做」，跳过一天只是节奏断了，
+  // 不是逾期（打卡后 due_time 直接顺延到未来，这个「逾期」根本不成立）。
+  // 所以循环用「今天 / 明天 / 已断 N 天」，一次性任务才用「今天到期 / 逾期」。
+  if (todo.recurring) {
+    if (d < 0) {
+      // 逐期补做 = 落下的还要做；跳过模式 = 这几期直接作废，只是断了
+      return todo.catch_up
+        ? { label: `落下 ${-d} 天`, cls: 'text-rose-400' }
+        : { label: `已断 ${-d} 天`, cls: 'text-rose-400' }
+    }
+    if (d === 0) return { label: '今天', cls: 'text-amber-300' }
+    if (d === 1) return { label: '明天', cls: 'text-sky-300' }
+    return { label: `${d} 天后 · ${formatDate(todo.due_time)}`, cls: 'text-slate-400' }
+  }
   if (d < 0) return { label: `逾期 ${-d} 天`, cls: 'text-rose-400' }
   if (d === 0) return { label: '今天到期', cls: 'text-amber-300' }
   if (d === 1) return { label: '明天到期', cls: 'text-sky-300' }
