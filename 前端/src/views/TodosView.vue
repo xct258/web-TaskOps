@@ -26,6 +26,7 @@ import {
   settledToday,
   shiftDate,
   todayISO,
+  waiting,
 } from '@/utils/format'
 
 const toast = useToast()
@@ -127,18 +128,20 @@ const labelClass = 'block text-slate-400 mb-1'
 
 const FILTERS = [
   { key: 'pending', label: '待处理' },
+  { key: 'later', label: '未到期' },
   { key: 'done', label: '已完成' },
   { key: 'cancelled', label: '已取消' },
   { key: 'all', label: '全部' },
 ]
 
 const stats = computed(() => {
-  // 与列表同一口径：设了提醒日期等提醒日期到了，循环任务还要等下次到期的那天
+  // 与列表同一口径：时间到了才进待处理，没到时间的在「未到期」等着
   const pending = items.value.filter(inPending).length
+  const later = items.value.filter(waiting).length
   // 已取消同样是 processed=true，只能靠 closed_reason 区分，
   // 否则「已完成」会把取消的任务也算进去、两个页签的数字互相串。
   const cancelled = items.value.filter((t) => t.processed && t.closed_reason === 'cancelled').length
-  return { pending, cancelled }
+  return { pending, later, cancelled }
 })
 
 function matchesFilter(todo, key) {
@@ -152,6 +155,7 @@ function matchesFilter(todo, key) {
   }
   if (key === 'cancelled') return todo.processed && todo.closed_reason === 'cancelled'
   if (key === 'pending') return inPending(todo)
+  if (key === 'later') return waiting(todo)
   if (key === 'overdue') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) < today
   if (key === 'today') return !todo.processed && todo.due_time && String(todo.due_time).slice(0, 10) === today
   return true
@@ -160,8 +164,9 @@ function matchesFilter(todo, key) {
 const visible = computed(() => {
   const q = search.value.trim().toLowerCase()
   return items.value
-    // 「待处理」的进出由 inPending 一处决定（提醒日期 / 循环的下次到期日）；
-    // 「已完成 / 已取消」不受它限制，否则提前完成或取消的任务会凭空消失。
+    // 页签归属统一由 utils/format 里的 inPending / settledToday / waiting 决定
+    // （待处理 = 时间到了，未到期 = 时间没到，已完成 = 做完了 / 今天动过的循环）；
+    // 「已完成 / 已取消」不受日期限制，否则提前完成或取消的任务会凭空消失。
     .filter((t) => matchesFilter(t, filter.value))
     .filter((t) => !q || [t.title, t.content].filter(Boolean).some((f) => String(f).toLowerCase().includes(q)))
     .sort((a, b) => {
@@ -217,7 +222,7 @@ function replace(updated) {
 }
 
 /* ------------------------- 提醒日期快捷选项 ------------------------- */
-// 「提醒日期」默认为空 = 不限制，任务随时出现在「待处理」里。
+// 「提醒日期」默认为空 = 不设 tickler，按到期日进「待处理」（没到期日前在「未到期」）。
 // 选了到期日期之后，用相对它的快捷项来设：当天 / 提前 N 天 / 自定义。
 const REMIND_PRESETS = [
   { key: 'same', label: '当天', offset: 0 },
@@ -283,7 +288,11 @@ watch(
 )
 
 const remindHint = computed(() => {
-  if (!form.remind_time) return '不设提醒日期：一直显示在「待处理」里'
+  if (!form.remind_time) {
+    return form.due_time
+      ? '不设提醒日期：到到期日才进「待处理」，之前都在「未到期」里'
+      : '不设提醒日期、也不设到期日：一直显示在「待处理」里'
+  }
   const label = formatDate(form.remind_time)
   if (!form.due_time) return label
   const days = remindOffsetDays(form.due_time, form.remind_time)
@@ -518,6 +527,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         >
           {{ f.label }}
           <span v-if="f.key === 'pending'" class="opacity-70">{{ stats.pending }}</span>
+          <span v-else-if="f.key === 'later'" class="opacity-70">{{ stats.later }}</span>
           <span v-else-if="f.key === 'cancelled' && stats.cancelled" class="text-amber-300 font-bold bg-amber-500/10 px-1 rounded">{{ stats.cancelled }}</span>
         </button>
       </div>
