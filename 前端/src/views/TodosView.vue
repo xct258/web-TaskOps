@@ -609,22 +609,22 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
                 v-if="todo.recurring"
                 class="text-[9px] font-mono px-1.5 py-px rounded-md border bg-indigo-500/15 text-indigo-300 border-indigo-400/30"
               >
-                <Icon name="refresh" :size="9" class="inline -mt-px" /> {{ cycleLabel(todo) }}
+                <Icon name="refresh" :size="9" class="inline align-[-0.12em]" /> {{ cycleLabel(todo) }}
               </span>
             </div>
 
             <p class="text-[11px] text-slate-400 mt-1 selectable line-clamp-2">{{ todo.content }}</p>
 
             <div class="flex items-center gap-2.5 mt-1.5 text-[10px] font-mono flex-wrap">
-              <span v-if="dueStatus(todo)" class="flex items-center gap-1" :class="dueStatus(todo).cls">
-                <Icon name="calendar" :size="10" />
+              <span v-if="dueStatus(todo)" :class="dueStatus(todo).cls">
+                <Icon name="calendar" :size="10" class="inline align-[-0.12em]" />
                 {{ dueStatus(todo).label }}
               </span>
               <span v-if="todo.remind_time" class="text-slate-500">
                 提醒 {{ formatDate(todo.remind_time) }}
               </span>
-              <span v-if="todo.mqtt_enabled && todo.mqtt_at" class="flex items-center gap-1 text-sky-400/90">
-                <Icon name="share" :size="10" />
+              <span v-if="todo.mqtt_enabled && todo.mqtt_at" class="text-sky-400/90">
+                <Icon name="share" :size="10" class="inline align-[-0.12em]" />
                 MQTT {{ formatPush(todo.mqtt_at) }}
               </span>
               <!-- 循环任务：点「上次完成」看打卡日历（一次性任务没有历史，保持纯文本） -->
