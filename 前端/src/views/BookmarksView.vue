@@ -130,6 +130,7 @@ async function save() {
     toast.error('名称与链接为必填项')
     return
   }
+  addTag() // 提交尚未回车、还留在输入框里的标签
   const payload = {
     title: form.title.trim(),
     url: form.url.trim(),
@@ -321,7 +322,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
             v-model="search"
             type="text"
             placeholder="搜索"
-            class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-indigo-400 rounded-lg text-xs text-white placeholder-slate-500 backdrop-blur-md focus:outline-none transition"
+            class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-indigo-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
             @keydown.enter="openFirst"
             @keydown.esc="closeSearch"
           />
@@ -393,7 +394,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
                 <button type="button" class="hover:text-white" @click="removeTag(tag)">×</button>
               </span>
             </template>
-            <input v-model="tagInput" :class="'bg-transparent outline-none text-white text-xs placeholder-slate-500 w-20 flex-1 min-w-[3rem]'" placeholder="输入标签后回车" @keydown="onTagKey" />
+            <input v-model="tagInput" :class="'bg-transparent outline-none text-white text-xs placeholder-slate-500 w-20 flex-1 min-w-[3rem]'" :placeholder="parseTags(form.tags).length ? '' : '输入标签后回车或点空白处'" @keydown="onTagKey" @blur="addTag" />
           </div>
         </div>
       </div>

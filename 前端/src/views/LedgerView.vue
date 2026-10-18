@@ -332,7 +332,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
     <!-- 资产概览 -->
     <div class="flex-shrink-0 grid grid-cols-2 md:grid-cols-4 gap-2.5 mb-2">
       <div
-        class="text-left p-3 rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10"
+        class="text-left p-3 rounded-2xl bg-slate-900/55 border border-white/10"
       >
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-mono text-slate-400">资金余额</span>
@@ -341,7 +341,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       </div>
 
       <div
-        class="text-left p-3 rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10"
+        class="text-left p-3 rounded-2xl bg-slate-900/55 border border-white/10"
       >
         <div class="flex items-center justify-between">
           <span class="text-[10px] font-mono text-slate-400">负债总额</span>
@@ -349,14 +349,14 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         <div class="text-lg font-bold text-rose-300 font-mono mt-1">¥ {{ formatMoney(liability) }}</div>
       </div>
 
-      <div class="p-3 rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10">
+      <div class="p-3 rounded-2xl bg-slate-900/55 border border-white/10">
         <span class="text-[10px] font-mono text-slate-400" title="资金余额减去负债，不含房产等未记入账本的资产">净资金（余额 − 负债）</span>
         <div class="text-lg font-bold font-mono mt-1" :class="net >= 0 ? 'text-emerald-300' : 'text-rose-300'">
           ¥ {{ formatMoney(net) }}
         </div>
       </div>
 
-      <div class="p-3 rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10">
+      <div class="p-3 rounded-2xl bg-slate-900/55 border border-white/10">
         <span class="text-[10px] font-mono text-slate-400">本月收支</span>
         <div class="text-xs font-mono mt-1.5 space-y-0.5">
           <div class="text-emerald-300">收 +{{ formatMoney(monthStats.income) }}</div>
@@ -442,7 +442,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         <div
           v-for="record in visible"
           :key="record.displayKey"
-          class="group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 backdrop-blur-md border border-white/10 transition"
+          class="group flex items-center gap-3 px-3.5 py-2.5 rounded-2xl bg-slate-900/55 hover:bg-slate-900/80 border border-white/10 transition"
           @contextmenu.prevent="onRecordCtx(record, $event)"
           @touchstart.passive="onRecordPressStart(record, $event)"
           @touchmove="onRecordPressEnd"

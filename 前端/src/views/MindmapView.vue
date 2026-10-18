@@ -259,6 +259,7 @@ async function save() {
     return
   }
   if (mode.value === 'graph') commitTree()
+  addTag() // 提交尚未回车、还留在输入框里的标签
   const payload = { title: draft.title.trim(), tags: parseTags(draft.tags), outline: draft.outline }
   saving.value = true
   try {
@@ -818,7 +819,7 @@ onBeforeUnmount(() => {
           <button
             v-for="map in visible"
             :key="map.id"
-            class="group relative flex flex-col text-left rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 hover:border-rose-400/40 hover:bg-slate-900/80 transition overflow-hidden"
+            class="group relative flex flex-col text-left rounded-2xl bg-slate-900/55 border border-white/10 hover:border-rose-400/40 hover:bg-slate-900/80 transition overflow-hidden"
             @click="onCardClick(map)"
             @contextmenu.prevent="onCardCtx(map, $event)"
             @touchstart.passive="onCardPressStart(map, $event)"
@@ -916,7 +917,7 @@ onBeforeUnmount(() => {
         </button>
       </div>
 
-      <div class="flex-1 min-h-0 flex flex-col rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 overflow-hidden">
+      <div class="flex-1 min-h-0 flex flex-col rounded-2xl bg-slate-900/55 border border-white/10 overflow-hidden">
         <input
           v-model="draft.title"
           class="w-full flex-shrink-0 bg-transparent px-4 sm:px-5 pt-4 pb-2 text-base sm:text-lg font-semibold text-white caret-rose-400 placeholder-slate-500 focus:outline-none selectable"
@@ -934,8 +935,9 @@ onBeforeUnmount(() => {
           <input
             v-model="tagInput"
             class="flex-1 min-w-[5rem] bg-transparent text-[11px] text-slate-300 caret-rose-400 placeholder-slate-600 focus:outline-none selectable"
-            placeholder="输入标签后回车"
+            :placeholder="draftTagList.length ? '' : '输入标签后回车或点空白处'"
             @keydown="onTagKey"
+            @blur="addTag"
           />
         </div>
 
@@ -1001,7 +1003,7 @@ onBeforeUnmount(() => {
 
         <!-- 搜索（左上浮层） -->
         <div
-          class="absolute top-2.5 left-2.5 z-10 flex items-center gap-1 pl-2 pr-1.5 py-1 rounded-xl bg-slate-950/75 backdrop-blur-md border border-white/10 shadow-lg"
+          class="absolute top-2.5 left-2.5 z-10 flex items-center gap-1 pl-2 pr-1.5 py-1 rounded-xl bg-slate-950/75 border border-white/10 shadow-lg"
           @pointerdown.stop
           @wheel.stop
         >
@@ -1027,7 +1029,7 @@ onBeforeUnmount(() => {
 
         <!-- 控制（右下浮层） -->
         <div class="absolute bottom-2.5 right-2.5 z-10 flex items-center gap-1.5" @pointerdown.stop @wheel.stop>
-          <div class="flex items-center gap-0.5 bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-xl px-1 py-0.5 shadow-lg text-slate-300">
+          <div class="flex items-center gap-0.5 bg-slate-950/75 border border-white/10 rounded-xl px-1 py-0.5 shadow-lg text-slate-300">
             <button class="p-1.5 rounded-lg hover:bg-white/10 transition" title="适应窗口" @click="fitView">
               <Icon name="target" :size="14" />
             </button>
@@ -1056,7 +1058,7 @@ onBeforeUnmount(() => {
             </button>
           </div>
 
-          <div class="flex items-center gap-0.5 bg-slate-950/75 backdrop-blur-md border border-white/10 rounded-xl px-1 py-0.5 shadow-lg text-slate-300">
+          <div class="flex items-center gap-0.5 bg-slate-950/75 border border-white/10 rounded-xl px-1 py-0.5 shadow-lg text-slate-300">
             <button class="p-1.5 rounded-lg hover:bg-white/10 transition" title="导出 PNG" @click="onExportPng">
               <Icon name="image" :size="14" />
             </button>

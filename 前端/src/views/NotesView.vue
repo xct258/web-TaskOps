@@ -122,6 +122,7 @@ async function save() {
     toast.error('标题不能为空')
     return
   }
+  addTag() // 提交尚未回车、还留在输入框里的标签
   const payload = { title: draft.title.trim(), content: draft.content, tags: parseTags(draft.tags) }
   saving.value = true
   try {
@@ -324,7 +325,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <button
             v-for="note in visible"
             :key="note.id"
-            class="group relative flex flex-col text-left rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 hover:border-violet-400/40 hover:bg-slate-900/80 transition p-3 min-h-[7.5rem]"
+            class="group relative flex flex-col text-left rounded-2xl bg-slate-900/55 border border-white/10 hover:border-violet-400/40 hover:bg-slate-900/80 transition p-3 min-h-[7.5rem]"
             @click="onNoteCardClick(note)"
             @contextmenu.prevent="onNoteCtx(note, $event)"
             @touchstart.passive="onNotePressStart(note, $event)"
@@ -396,7 +397,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
       </div>
 
       <!-- 文档卡片：标题 / 标签 / 正文一体 -->
-      <div class="flex-1 min-h-0 flex flex-col rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 overflow-hidden">
+      <div class="flex-1 min-h-0 flex flex-col rounded-2xl bg-slate-900/55 border border-white/10 overflow-hidden">
         <input
           v-model="draft.title"
           class="w-full flex-shrink-0 bg-transparent px-4 sm:px-5 pt-4 pb-2 text-base sm:text-lg font-semibold text-white caret-violet-400 placeholder-slate-500 focus:outline-none selectable"
@@ -414,8 +415,9 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           <input
             v-model="tagInput"
             class="flex-1 min-w-[5rem] bg-transparent text-[11px] text-slate-300 caret-violet-400 placeholder-slate-600 focus:outline-none selectable"
-            placeholder="输入标签后回车"
+            :placeholder="draftTagList.length ? '' : '输入标签后回车或点空白处'"
             @keydown="onTagKey"
+            @blur="addTag"
           />
         </div>
 

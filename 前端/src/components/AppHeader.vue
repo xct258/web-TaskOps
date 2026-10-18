@@ -115,7 +115,7 @@ function go(path) {
     <!-- 天气 -->
     <div class="flex items-center gap-2 sm:gap-3.5 font-mono flex-shrink-0">
       <div
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/60 border border-white/10 backdrop-blur-md text-xs"
+        class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/60 border border-white/10 text-xs"
       >
         <span class="text-sm sm:text-base leading-none">{{ icon }}</span>
         <div class="flex flex-col text-left leading-none">
@@ -146,7 +146,7 @@ function go(path) {
         </button>
         <div
           v-if="menuOpen"
-          class="absolute right-0 top-full mt-2 z-50 w-44 rounded-xl bg-slate-900/95 backdrop-blur-md border border-white/10 shadow-2xl p-1.5 space-y-0.5"
+          class="absolute right-0 top-full mt-2 z-50 w-44 rounded-xl bg-slate-900/95 border border-white/10 shadow-2xl p-1.5 space-y-0.5"
         >
           <router-link
             v-for="item in NAV_ITEMS"

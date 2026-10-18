@@ -24,7 +24,7 @@ const STYLES = {
           v-for="toast in toasts"
           :key="toast.id"
           :class="[
-            'pointer-events-auto flex items-start gap-2.5 max-w-xs px-3.5 py-2.5 rounded-xl bg-slate-900/95 border backdrop-blur-md shadow-2xl text-xs text-slate-200',
+            'pointer-events-auto flex items-start gap-2.5 max-w-xs px-3.5 py-2.5 rounded-xl bg-slate-900/95 border shadow-2xl text-xs text-slate-200',
             (STYLES[toast.type] || STYLES.info).ring,
           ]"
           @click="dismiss(toast.id)"

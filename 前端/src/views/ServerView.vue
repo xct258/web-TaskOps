@@ -245,7 +245,7 @@ onUnmounted(() => {
         <div
           v-for="server in visible"
           :key="server.name"
-          class="rounded-2xl bg-slate-900/55 backdrop-blur-md border border-white/10 overflow-hidden"
+          class="rounded-2xl bg-slate-900/55 border border-white/10 overflow-hidden"
         >
           <!-- 主机头 -->
           <div class="flex items-center justify-between gap-3 px-3.5 py-2.5 border-b border-white/10">
