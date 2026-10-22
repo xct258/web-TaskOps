@@ -53,13 +53,11 @@ export function formatCompact(value) {
 /* --------------------------- 日期 / 时间 --------------------------- */
 export function parseDate(value) {
   if (!value) return null
-  // 后端日期字段是 YYYY-MM-DD；时间戳字段可能带时区。
-  const d = len(value) === 10 ? new Date(`${value}T00:00:00`) : new Date(value)
+  // 后端日期字段是 YYYY-MM-DD；时间戳可能带时区，push-server 用空格分隔。
+  const raw = String(value)
+  const normalized = raw.includes(' ') && !raw.includes('T') ? raw.replace(' ', 'T') : raw
+  const d = normalized.length === 10 ? new Date(`${normalized}T00:00:00`) : new Date(normalized)
   return Number.isNaN(d.getTime()) ? null : d
-}
-
-function len(value) {
-  return String(value).length
 }
 
 export function formatDate(value) {

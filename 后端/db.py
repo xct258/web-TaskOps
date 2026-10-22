@@ -11,7 +11,7 @@ from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Liability, MindMap, Note, Todo, TodoCompletion, ServerStatus
+from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Liability, MindMap, Note, Todo, TodoCompletion
 
 # ---------------------------------------------------------------------------
 # 路径：以本文件所在目录为基准，data/ 与代码同级
@@ -26,7 +26,6 @@ DATA_DIR.mkdir(exist_ok=True)
 DATABASE_URLS = {
     "todo": f"sqlite:///{DATA_DIR / 'todos.db'}",
     "bookmark": f"sqlite:///{DATA_DIR / 'bookmarks.db'}",
-    "server_status": f"sqlite:///{DATA_DIR / 'server_status_v2.db'}",
     "ledger": f"sqlite:///{DATA_DIR / 'ledger.db'}",
     "note": f"sqlite:///{DATA_DIR / 'notes.db'}",
     "mindmap": f"sqlite:///{DATA_DIR / 'mindmaps.db'}",
@@ -42,7 +41,6 @@ ENGINES = {
 
 todo_engine = ENGINES["todo"]
 bookmark_engine = ENGINES["bookmark"]
-server_status_engine = ENGINES["server_status"]
 ledger_engine = ENGINES["ledger"]
 note_engine = ENGINES["note"]
 mindmap_engine = ENGINES["mindmap"]
@@ -75,9 +73,6 @@ def init_db() -> None:
     SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__, TodoCompletion.__table__])
     SQLModel.metadata.create_all(bookmark_engine, tables=[Bookmark.__table__])
     SQLModel.metadata.create_all(
-        server_status_engine, tables=[ServerStatus.__table__]
-    )
-    SQLModel.metadata.create_all(
         ledger_engine,
         tables=[Ledger.__table__, Asset.__table__, Liability.__table__],
     )
@@ -94,9 +89,6 @@ get_todo_session = make_session_getter(
 )
 get_bookmark_session = make_session_getter(
     bookmark_engine, Bookmark.__table__, name="bookmark"
-)
-get_server_status_session = make_session_getter(
-    server_status_engine, ServerStatus.__table__, name="server_status"
 )
 get_ledger_session = make_session_getter(
     ledger_engine, Ledger.__table__, Asset.__table__, Liability.__table__,

@@ -5,9 +5,9 @@
     后端/
     ├── main.py            ← 本文件：组装 + 启动（uvicorn main:app）
     ├── db.py              ← 引擎、会话工厂、建表
-    ├── models.py          ← 8 张表结构
+    ├── models.py          ← 各业务表结构
     ├── utils.py           ← 日期/周期/资金纯函数
-    └── routers/           ← todos / bookmarks / server / ledger / notes / mindmaps
+    └── routers/           ← todos / bookmarks / monitor / ledger / notes / mindmaps / inventory
 
 启动（在本目录执行）::
 
@@ -24,7 +24,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
 
 from db import init_db
-from routers import bookmarks, inventory, ledger, mindmaps, notes, todos, server
+from routers import bookmarks, inventory, ledger, mindmaps, monitor, notes, todos
 
 
 @asynccontextmanager
@@ -56,7 +56,7 @@ app.add_middleware(
 # 路由挂载（统一挂到 /api 前缀，便于 nginx/NPM 反代且与前端同源）
 app.include_router(todos.router, prefix="/api")
 app.include_router(bookmarks.router, prefix="/api")
-app.include_router(server.router, prefix="/api")
+app.include_router(monitor.router, prefix="/api")
 app.include_router(ledger.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
 app.include_router(mindmaps.router, prefix="/api")

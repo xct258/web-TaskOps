@@ -85,17 +85,28 @@ function go(path) {
           </span>
         </button>
 
-        <!-- 服务 -->
+        <!-- 服务信息 -->
         <button
           class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
-          title="前往服务状态"
+          title="前往服务信息"
           @click="go('/server')"
         >
           <span
-            class="h-1.5 w-1.5 rounded-full animate-pulse"
-            :class="summary.serverUp > 0 ? 'bg-emerald-400' : 'bg-slate-500'"
+            class="h-1.5 w-1.5 rounded-full"
+            :class="
+              summary.monitorErrors
+                ? 'bg-rose-400 animate-pulse'
+                : summary.monitorWarns
+                  ? 'bg-amber-400'
+                  : summary.monitorTotal
+                    ? 'bg-emerald-400'
+                    : 'bg-slate-500'
+            "
           />
-          <span>{{ summary.serverUp }}/{{ summary.serverTotal }} 在线</span>
+          <span v-if="summary.monitorErrors">{{ summary.monitorErrors }} 台异常</span>
+          <span v-else-if="summary.monitorWarns">{{ summary.monitorWarns }} 台告警</span>
+          <span v-else-if="summary.monitorTotal">{{ summary.monitorNormal }}/{{ summary.monitorTotal }} 正常</span>
+          <span v-else>暂无上报</span>
         </button>
 
         <!-- 待办：有逾期时红色提醒 -->

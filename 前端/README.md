@@ -9,12 +9,14 @@
 | --- | --- | --- |
 | 书签 | `/#/bookmarks` | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{id}`、`POST /api/bookmarks/{id}/visit` |
 | 待办 | `/#/todos` | `GET/POST /api/todos`、`PUT/DELETE /api/todos/{id}`、`processed` / `undo` / `snooze` |
-| 服务状态 | `/#/server` | `GET/POST /api/server/status` |
+| 服务信息 | `/#/server` | `GET /api/monitor/servers`（后端代理 push-server `/records`，按服务器分组展示摘要，点击卡片在弹窗中左右分栏：左侧切换项目和项目下的服务，右侧查看当前范围记录并分页） |
 | 账本 | `/#/ledger` | `GET/POST/PUT/DELETE /api/ledger`、`GET/POST /api/asset`、`/api/liability` |
 | 笔记 | `/#/notes` | `GET/POST /api/notes`、`PUT/DELETE /api/notes/{id}`（Markdown 渲染） |
 | 思维导图 | `/#/mindmaps` | `GET/POST /api/mindmaps`、`PUT/DELETE /api/mindmaps/{id}`（前端解析缩进大纲并自动布局） |
 
-顶部状态胶囊（资产 / 服务在线数 / 待办进度）取自各模块接口的汇总，点击可跳转到对应模块。
+顶部状态胶囊（资产 / 服务异常数 / 待办进度）取自各模块接口的汇总，点击可跳转到对应模块。
+
+服务页不直接连 push-server（对方没有 CORS），而是走后端 `GET /api/monitor/servers`；后端再读 push-server 的 `GET /records`，所以现有服务器上报脚本无需改动。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）；`POST /api/push` 必须带 `title` 和 `status`（`ok` / `warn` / `error` / `info`），页面按 `status` 显示级别、按 `title` 显示脚本名；卡片只显示摘要，点击后弹窗左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前选中的项目/服务记录，每页 5 条；左侧同时提供「全部项目」和「全部服务」查看汇总。移动端隐藏左侧栏，改为服务器名称旁边的按钮；按钮显示当前项目/服务，点击后弹出选择弹窗。
 
 ## 目录结构
 

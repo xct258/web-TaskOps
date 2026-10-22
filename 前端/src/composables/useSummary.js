@@ -10,8 +10,11 @@ export const summary = reactive({
   bookmarkTotal: 0,
   todoTotal: 0,
   todoOverdue: 0,
-  serverTotal: 0,
-  serverUp: 0,
+  monitorTotal: 0,
+  monitorNormal: 0,
+  monitorErrors: 0,
+  monitorWarns: 0,
+  monitorIssues: 0,
   loaded: false,
   loading: false,
   error: '',
@@ -21,12 +24,12 @@ export async function loadSummary() {
   if (summary.loading) return
   summary.loading = true
   try {
-    const [asset, liability, bookmarks, todos, servers] = await Promise.all([
+    const [asset, liability, bookmarks, todos, monitors] = await Promise.all([
       api.ledger.getAsset().catch(() => null),
       api.ledger.getLiability().catch(() => null),
       api.bookmarks.list().catch(() => []),
       api.todos.list().catch(() => []),
-      api.server.list().catch(() => []),
+      api.monitor.servers().catch(() => ({ servers: [] })),
     ])
 
     const today = todayISO()
@@ -39,8 +42,12 @@ export async function loadSummary() {
     summary.todoOverdue = pendingTodos.filter(
       (t) => t.due_time && String(t.due_time).split('T')[0] < today,
     ).length
-    summary.serverTotal = servers.length
-    summary.serverUp = servers.filter((s) => s.is_success).length
+    const serverRows = monitors?.servers || []
+    summary.monitorTotal = serverRows.length
+    summary.monitorErrors = serverRows.filter((item) => item.severity === 'error').length
+    summary.monitorWarns = serverRows.filter((item) => item.severity === 'warn').length
+    summary.monitorIssues = summary.monitorErrors + summary.monitorWarns
+    summary.monitorNormal = summary.monitorTotal - summary.monitorIssues
     summary.loaded = true
     summary.error = ''
   } catch (err) {

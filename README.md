@@ -53,9 +53,9 @@
 后端/
 ├── main.py            # FastAPI 入口：CORS、lifespan 建表、挂载 /api 路由、/docs
 ├── db.py              # 各业务域独立 SQLite 引擎 / 会话工厂
-├── models.py          # 数据表模型（Todo/Bookmark/ServerStatus/Ledger/Asset/Liability/Note/MindMap）
+├── models.py          # 数据表模型（Todo/Bookmark/Ledger/Asset/Liability/Note/MindMap）
 ├── utils.py           # 日期、循环周期、账本资金影响等纯函数
-└── routers/           # 各业务路由：todos / bookmarks / server / ledger / notes / mindmaps
+└── routers/           # 各业务路由：todos / bookmarks / monitor / ledger / notes / mindmaps
 容器构建脚本/
 ├── init-components.sh # 镜像构建期：装依赖（含 Node）+ 前端构建 + 拉取后端文件 + 安装 7zz
 └── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
@@ -181,13 +181,15 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | --- | --- |
 | 待办 | `GET/POST /api/todos`、`PUT/DELETE /api/todos/{rid}`、`PUT /api/todos/{rid}/processed`、`POST /api/todos/{rid}/undo`、`POST /api/todos/{rid}/snooze` |
 | 书签 | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{bid}`、`POST /api/bookmarks/{bid}/visit` |
-| 服务监控 | `GET/POST /api/server/status` |
+| 服务信息 | `GET /api/monitor/servers`（按服务器分组）、`GET /api/monitor/records`、`GET /api/monitor/health` |
 | 账本 | `GET/POST /api/ledger`、`PUT/DELETE /api/ledger/{ledger_id}` |
 | 资产/负债 | `GET/POST /api/asset`、`GET/POST /api/liability` |
 | 笔记 | `GET/POST /api/notes`、`PUT/DELETE /api/notes/{nid}` |
 | 思维导图 | `GET/POST /api/mindmaps`、`PUT/DELETE /api/mindmaps/{mid}` |
 
 > 在线调试：直连 `http://<主机>:8481/docs`（Scalar 文档，数据来自 `/openapi.json`）。
+>
+> 服务信息的数据源是 push-server：服务器脚本 `POST /api/push` 上报，TaskOps 读取其 `GET /records` 并按 `server_name` 分组展示；卡片弹窗采用左右分栏：左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前范围的记录并分页，支持「全部项目」和「全部服务」；移动端把左侧栏收进服务器名称旁边的按钮，按钮显示当前项目/服务，点击后弹窗选择。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）。`/api/push` 的 `title` 和 `status`（`ok` / `warn` / `error` / `info`）为必填。后端通过 `PUSH_SERVER_URL` 配置地址（默认 `https://push-server.o1-1.xct258.top`），可用 `GET /api/monitor/health` 检查连通性。
 
 ---
 

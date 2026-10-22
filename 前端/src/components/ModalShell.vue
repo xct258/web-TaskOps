@@ -9,25 +9,41 @@ const props = defineProps({
   icon: { type: String, default: '' },
   maxWidth: { type: String, default: 'max-w-md' },
   closeOnBackdrop: { type: Boolean, default: true },
+  zIndex: { type: Number, default: 50 },
 })
 const emit = defineEmits(['update:modelValue'])
+
+// 多个弹窗叠加时，Esc 只关闭最上层，避免选择弹窗把下面的详情弹窗一起关掉。
+const openModals = []
+let modalSeed = 0
+const modalId = (modalSeed += 1)
 
 function close() {
   emit('update:modelValue', false)
 }
 
+function removeKeydown() {
+  window.removeEventListener('keydown', onKeydown)
+  const index = openModals.indexOf(modalId)
+  if (index >= 0) openModals.splice(index, 1)
+}
+
 function onKeydown(e) {
-  if (e.key === 'Escape') close()
+  if (e.key === 'Escape' && openModals[openModals.length - 1] === modalId) close()
 }
 
 watch(
   () => props.modelValue,
   (open) => {
-    if (open) window.addEventListener('keydown', onKeydown)
-    else window.removeEventListener('keydown', onKeydown)
+    if (open) {
+      if (!openModals.includes(modalId)) openModals.push(modalId)
+      window.addEventListener('keydown', onKeydown)
+    } else {
+      removeKeydown()
+    }
   },
 )
-onUnmounted(() => window.removeEventListener('keydown', onKeydown))
+onUnmounted(removeKeydown)
 </script>
 
 <template>
@@ -40,19 +56,21 @@ onUnmounted(() => window.removeEventListener('keydown', onKeydown))
     >
       <div
         v-if="modelValue"
-        class="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md"
+        class="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md"
+        :style="{ zIndex }"
         @click.self="closeOnBackdrop && close()"
       >
         <div
           :class="['w-full bg-slate-900 border border-white/15 rounded-2xl shadow-2xl flex flex-col max-h-[88vh] animate-scale-in', maxWidth]"
         >
           <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/10 shrink-0">
-            <h3 class="text-sm font-bold text-white font-mono flex items-center gap-2 min-w-0">
-              <Icon v-if="icon" :name="icon" :size="15" class="text-indigo-400" />
-              <span class="truncate">{{ title }}</span>
-            </h3>
+            <div class="flex min-w-0 flex-1 items-center gap-2">
+              <Icon v-if="icon" :name="icon" :size="15" class="shrink-0 text-indigo-400" />
+              <h3 class="min-w-0 truncate text-sm font-bold text-white font-mono">{{ title }}</h3>
+              <slot name="header-actions" />
+            </div>
             <button
-              class="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
+              class="shrink-0 p-1 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition"
               title="关闭 (Esc)"
               @click="close"
             >

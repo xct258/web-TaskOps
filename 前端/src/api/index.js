@@ -79,11 +79,15 @@ export const api = {
     history: (id) => request(`/todos/${id}/history`),
   },
 
-  /* --------------------------- 服务状态 --------------------------- */
-  server: {
-    list: (serverName) =>
-      request(`/server/status${serverName ? `?server_name=${encodeURIComponent(serverName)}` : ''}`),
-    report: (data) => request('/server/status', { method: 'POST', body: clean(data) }),
+  /* --------------------------- 服务信息 --------------------------- */
+  monitor: {
+    // 后端代理 push-server 的 /records，按 server_name 分组返回 latest + 历史。
+    servers: (params = {}) => {
+      const qs = new URLSearchParams(
+        Object.entries(params).filter(([, value]) => value !== undefined && value !== null && value !== ''),
+      )
+      return request(`/monitor/servers${qs.toString() ? `?${qs}` : ''}`)
+    },
   },
 
   /* ----------------------------- 账本 ----------------------------- */

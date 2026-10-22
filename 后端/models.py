@@ -95,23 +95,6 @@ class Bookmark(SQLModel, table=True):
     created_at: date = Field(default_factory=date.today)
 
 
-# 服务状态上报：同一 (server_name, service_name) 只保留一条（UPSERT 语义）。
-# extra 兜底收纳所有非标准字段，探针想加什么字段直接塞，不用改表。
-class ServerStatus(SQLModel, table=True):
-
-    id: Optional[int] = Field(default=None, primary_key=True)
-
-    server_name: str
-    service_name: str
-    content: str
-    is_success: bool
-    time: str
-
-    extra: Dict = Field(default_factory=dict, sa_column=Column(JSON))
-
-    received_at: datetime = Field(default_factory=shanghai_now)
-
-
 # 账本流水。写操作会自动同步 Asset/Liability，见 utils.ledger_effect。
 class Ledger(SQLModel, table=True):
 
