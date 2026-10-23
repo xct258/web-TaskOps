@@ -194,6 +194,7 @@ function openCardMenu(bookmark, x, y, fromTouch = false) {
   menu.open(
     [
       { key: 'edit', label: '编辑', action: () => openEdit(bookmark) },
+      { key: 'favicon', label: '更新图标', action: () => refreshFavicon(bookmark) },
       { key: 'copy', label: '复制链接', action: () => copyLink(bookmark) },
       { key: 'delete', label: '删除', danger: true, action: () => askDelete(bookmark) },
     ],
@@ -201,6 +202,19 @@ function openCardMenu(bookmark, x, y, fromTouch = false) {
     y,
     { width: 152, title: bookmark.title, fromTouch },
   )
+}
+
+// 更新图标：只有用户主动选这项才让后端重新抓，平时直接读缓存。
+async function refreshFavicon(bookmark) {
+  try {
+    const updated = await api.bookmarks.refreshFavicon(bookmark.id)
+    const idx = items.value.findIndex((b) => b.id === updated.id)
+    if (idx >= 0) items.value[idx] = updated
+    if (updated.favicon_url) toast.success('图标已更新')
+    else toast.error('没抓到该网站的图标，先显示首字母')
+  } catch (err) {
+    toast.error(`更新图标失败：${err.message}`)
+  }
 }
 
 function onCardCtx(bookmark, e) {

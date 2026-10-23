@@ -1,11 +1,24 @@
 <script setup>
 import { computed, ref } from 'vue'
+import { assetUrl } from '@/api'
 import { firstChar, gradientFor, tagColor } from '@/utils/format'
 
 const props = defineProps({ bookmark: { type: Object, required: true } })
 const emit = defineEmits(['open', 'ctx'])
 
 const MAX_TAGS = 2
+
+// 图标由后端缓存提供（favicon_url）；加载失败时记住这个地址，
+// 之后 favicon_url 变了（右键更新图标会带新版本号）就自动重试。
+const failedSrc = ref('')
+const faviconSrc = computed(() => {
+  const src = assetUrl(props.bookmark.favicon_url)
+  return src && src !== failedSrc.value ? src : ''
+})
+
+function onIconError() {
+  failedSrc.value = assetUrl(props.bookmark.favicon_url)
+}
 
 const tags = computed(() => props.bookmark.tags || [])
 // 卡片窄（xl 下每格约 200px，留给正文的只有 130~160px）：只渲染前 MAX_TAGS 个，
@@ -73,10 +86,19 @@ function guardClick(e) {
     @touchcancel="onPressEnd"
   >
     <div
-      class="w-7 h-7 rounded-lg bg-gradient-to-br flex items-center justify-center text-white font-mono text-[10px] font-bold shadow-md shadow-black/40 flex-shrink-0 group-hover/item:scale-105 transition-transform"
-      :class="gradientFor(bookmark.title)"
+      class="w-7 h-7 rounded-lg flex items-center justify-center text-white font-mono text-[10px] font-bold shadow-md shadow-black/40 flex-shrink-0 overflow-hidden group-hover/item:scale-105 transition-transform"
+      :class="faviconSrc ? 'bg-white/90 p-0.5' : ['bg-gradient-to-br', gradientFor(bookmark.title)]"
     >
-      {{ firstChar(bookmark.title) }}
+      <img
+        v-if="faviconSrc"
+        :src="faviconSrc"
+        :alt="bookmark.title"
+        class="w-full h-full object-contain"
+        loading="lazy"
+        decoding="async"
+        @error="onIconError"
+      />
+      <template v-else>{{ firstChar(bookmark.title) }}</template>
     </div>
     <div class="overflow-hidden flex-1 min-w-0">
       <div

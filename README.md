@@ -171,6 +171,8 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 - `start.sh` 复制代码：前端清空重铺（构建产物随镜像版本走），后端 `cp -rn` **不覆盖已存在文件**：
   升级镜像不会清空数据，但卷里后端旧代码也不会被自动覆盖（前端不受此限制）。
 - 改了表结构：删对应 `.db` 后重启，`lifespan` 会按新模型重建（会丢数据，先备份）。
+- 书签图标由后端抓取后缓存在 `/app/后端/data/favicons/`，通过 `/api/favicons/<文件名>` 只读暴露；
+  新建书签时试抓一次，抓不到就让前端显示首字母；只有右键「更新图标」才会重新抓取。
 - 改版升级：如需让卷内代码更新，删掉 `/app` 下对应旧文件再重启，或清空卷（会丢数据）。
 
 ---
@@ -180,8 +182,8 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | 域 | 方法与路径 |
 | --- | --- |
 | 待办 | `GET/POST /api/todos`、`PUT/DELETE /api/todos/{rid}`、`PUT /api/todos/{rid}/processed`、`POST /api/todos/{rid}/undo`、`POST /api/todos/{rid}/snooze` |
-| 书签 | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{bid}`、`POST /api/bookmarks/{bid}/visit` |
-| 服务信息 | `GET /api/monitor/servers`（按服务器分组）、`GET /api/monitor/records`、`GET /api/monitor/health` |
+| 书签 | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{bid}`、`POST /api/bookmarks/{bid}/visit`、`POST /api/bookmarks/{bid}/favicon`（重新抓取站点图标） |
+| 服务信息 | `GET /api/monitor/servers`（按服务器分组）、`GET /api/monitor/records`、`GET /api/monitor/health`、`POST/DELETE /api/monitor/servers/{server_name}/records/{record_id}/ack` |
 | 账本 | `GET/POST /api/ledger`、`PUT/DELETE /api/ledger/{ledger_id}` |
 | 资产/负债 | `GET/POST /api/asset`、`GET/POST /api/liability` |
 | 笔记 | `GET/POST /api/notes`、`PUT/DELETE /api/notes/{nid}` |
@@ -189,7 +191,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 > 在线调试：直连 `http://<主机>:8481/docs`（Scalar 文档，数据来自 `/openapi.json`）。
 >
-> 服务信息的数据源是 push-server：服务器脚本 `POST /api/push` 上报，TaskOps 读取其 `GET /records` 并按 `server_name` 分组展示；卡片弹窗采用左右分栏：左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前范围的记录并分页，支持「全部项目」和「全部服务」；移动端把左侧栏收进服务器名称旁边的按钮，按钮显示当前项目/服务，点击后弹窗选择。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）。`/api/push` 的 `title` 和 `status`（`ok` / `warn` / `error` / `info`）为必填。后端通过 `PUSH_SERVER_URL` 配置地址（默认 `https://push-server.o1-1.xct258.top`），可用 `GET /api/monitor/health` 检查连通性。
+> 服务信息的数据源是 push-server：服务器脚本 `POST /api/push` 上报，TaskOps 读取其 `GET /records` 并按 `server_name` 分组展示；卡片弹窗采用左右分栏：左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前范围的记录并分页，支持「全部项目」和「全部服务」；移动端把左侧栏收进服务器名称旁边的按钮，按钮显示当前项目/服务，点击后弹窗选择。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）。`/api/push` 的 `title` 和 `status`（`ok` / `warn` / `error` / `info`）为必填。后端通过 `PUSH_SERVER_URL` 配置地址（默认 `https://push-server.o1-1.xct258.top`），可用 `GET /api/monitor/health` 检查连通性。消息列表里每条报警的「消除报警」只作用于那条记录，不牵连同服务器的其他报警；原始记录仍保留，点「恢复」可以让它重新参与报警判断。
 
 ---
 

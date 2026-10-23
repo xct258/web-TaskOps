@@ -7,6 +7,7 @@ import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
 import { useToast } from '@/composables/useToast'
 import { usePageMenu } from '@/composables/usePageMenu'
+import { loadSummary } from '@/composables/useSummary'
 import { formatDateTime, relativeTime } from '@/utils/format'
 import { renderMarkdown } from '@/utils/markdown'
 
@@ -75,6 +76,7 @@ const contentPage = ref(1)
 const contentTop = ref(null)
 const mobilePickerOpen = ref(false)
 const mobileServiceTop = ref(null)
+const recordBusy = ref('')
 const RECORDS_PER_PAGE = 5
 
 const selectedServer = computed(
@@ -109,31 +111,36 @@ const groupedRecords = computed(() => {
       const scripts = Array.from(project.scripts.values())
         .map((script) => {
           script.records.sort(compareRecordsDesc)
-          const latest = script.records[0]
+          const latestActive = script.records.find((record) => !record.acked)
+          const latest = latestActive || script.records[0]
           return {
             ...script,
             count: script.records.length,
             latest,
-            severity: latest?.severity || 'info',
+            latestActive,
+            severity: latestActive?.severity || 'ok',
           }
         })
         .sort((a, b) => {
           const bySeverity = severityRank(a.severity) - severityRank(b.severity)
           if (bySeverity) return bySeverity
-          return compareRecordsDesc(a.latest, b.latest)
+          return compareRecordsDesc(a.latestActive || a.latest, b.latestActive || b.latest)
         })
 
-      const severity = scripts.reduce(
-        (worst, script) => (severityRank(script.severity) < severityRank(worst) ? script.severity : worst),
-        'info',
-      )
-      const latest = scripts.reduce(
-        (newest, script) =>
-          String(script.latest?.created_at || '') > String(newest?.created_at || '')
-            ? script.latest
-            : newest,
-        null,
-      )
+      const severity =
+        scripts.reduce(
+          (worst, script) =>
+            !worst || severityRank(script.severity) < severityRank(worst)
+              ? script.severity
+              : worst,
+          null,
+        ) || 'ok'
+      const latestActive = scripts.reduce((newest, script) => {
+        const candidate = script.latestActive
+        if (!candidate) return newest
+        return String(candidate.created_at || '') > String(newest?.created_at || '') ? candidate : newest
+      }, null)
+      const latest = latestActive || scripts[0]?.latest || null
 
       return {
         topic: project.topic,
@@ -260,7 +267,6 @@ function compareRecordsDesc(a, b) {
 function scrollContentTop() {
   nextTick(() => {
     contentTop.value?.scrollTo({ top: 0, behavior: 'smooth' })
-    contentTop.value?.scrollIntoView({ block: 'start', behavior: 'smooth' })
   })
 }
 
@@ -430,6 +436,46 @@ async function load(silent = false) {
   }
 }
 
+function recordBusyKey(record) {
+  return `${selectedName.value}:${record?.id ?? record?.created_at ?? ''}`
+}
+
+async function ackRecord(record, event) {
+  event?.stopPropagation()
+  if (!record || recordBusy.value) return
+  const key = recordBusyKey(record)
+  recordBusy.value = key
+  try {
+    await api.monitor.ackRecord(selectedName.value, record.id ?? 0, {
+      created_at: record.created_at || '',
+    })
+    toast.success('已消除这条报警')
+    await load(true)
+    loadSummary()
+  } catch (err) {
+    toast.error(`消除报警失败：${err.message}`)
+  } finally {
+    recordBusy.value = ''
+  }
+}
+
+async function restoreRecord(record, event) {
+  event?.stopPropagation()
+  if (!record || recordBusy.value) return
+  const key = recordBusyKey(record)
+  recordBusy.value = key
+  try {
+    await api.monitor.restoreRecord(selectedName.value, record.id ?? 0)
+    toast.success('已恢复这条报警')
+    await load(true)
+    loadSummary()
+  } catch (err) {
+    toast.error(`恢复报警失败：${err.message}`)
+  } finally {
+    recordBusy.value = ''
+  }
+}
+
 function openSearch() {
   searchOpen.value = true
   nextTick(() => searchEl.value?.focus())
@@ -539,7 +585,7 @@ onUnmounted(() => {
         </div>
 
         <span v-if="lastFetched" class="hidden md:inline text-[10px] font-mono text-slate-500" :title="lastFetched">
-          {{ lastFetched.slice(11, 16) }}
+          {{ lastFetched.slice(11, 19) }}
         </span>
 
         <button
@@ -604,8 +650,15 @@ onUnmounted(() => {
             <div class="min-w-0 flex-1">
               <div class="flex items-center gap-2 flex-wrap">
                 <h3 class="text-sm font-mono font-bold text-white truncate">{{ server.server_name }}</h3>
-                <span class="text-[10px] font-mono px-1.5 py-0.5 rounded-md border" :class="meta(server.severity).chip">
-                  {{ meta(server.severity).label }}
+                <span
+                  class="text-[10px] font-mono px-1.5 py-0.5 rounded-md border"
+                  :class="
+                    server.all_acked
+                      ? 'bg-slate-500/15 text-slate-300 border-white/15'
+                      : meta(server.severity).chip
+                  "
+                >
+                  {{ server.all_acked ? '已消除' : meta(server.severity).label }}
                 </span>
               </div>
               <div class="flex items-center gap-1.5 flex-wrap text-[10px] font-mono text-slate-500 mt-1">
@@ -667,7 +720,7 @@ onUnmounted(() => {
       </template>
 
       <div v-if="selectedServer" class="space-y-3">
-        <div class="grid gap-3 lg:grid-cols-[16rem_minmax(0,1fr)] lg:h-[68vh]">
+        <div class="grid gap-3 h-[60vh] lg:h-[68vh] lg:grid-cols-[16rem_minmax(0,1fr)]">
           <!-- 桌面端左侧：项目 + 服务 -->
           <aside
             class="hidden min-h-0 rounded-xl border border-white/10 bg-white/[0.02] p-3 custom-scroll lg:block lg:overflow-y-auto"
@@ -675,9 +728,13 @@ onUnmounted(() => {
             <div class="mb-3 flex flex-wrap items-center gap-2 border-b border-white/10 pb-3">
               <span
                 class="text-[10px] font-mono px-1.5 py-0.5 rounded-md border"
-                :class="meta(selectedServer.severity).chip"
+                :class="
+                  selectedServer.all_acked
+                    ? 'bg-slate-500/15 text-slate-300 border-white/15'
+                    : meta(selectedServer.severity).chip
+                "
               >
-                {{ meta(selectedServer.severity).label }}
+                {{ selectedServer.all_acked ? '已消除' : meta(selectedServer.severity).label }}
               </span>
               <span class="text-[10px] font-mono text-slate-500">
                 {{ groupedRecords.length }} 个项目 · {{ serviceTotal }} 个服务 · {{ selectedServer.count }} 条
@@ -774,7 +831,7 @@ onUnmounted(() => {
 
           <!-- 右侧：当前项目 / 服务的内容 -->
           <section
-            class="flex min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-950/30 lg:h-full"
+            class="flex h-full min-h-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-slate-950/30"
           >
             <header class="shrink-0 border-b border-white/10 px-3.5 py-3">
               <div class="flex flex-wrap items-center gap-2 text-[10px] font-mono text-slate-500">
@@ -792,25 +849,29 @@ onUnmounted(() => {
                   {{ meta(contentSeverity).label }}
                 </span>
                 <span class="text-[10px] font-mono text-slate-500">{{ contentRecords.length }} 条记录</span>
-                <span class="text-[10px] font-mono text-slate-600">· 每页 {{ RECORDS_PER_PAGE }} 条</span>
               </div>
             </header>
 
             <div
               ref="contentTop"
-              class="space-y-2 p-3 custom-scroll lg:min-h-0 lg:flex-1 lg:overflow-y-auto"
+              class="space-y-2 p-3 custom-scroll min-h-0 flex-1 overflow-y-auto"
             >
               <article
                 v-for="record in pagedContentRecords"
                 :key="record.id"
                 class="rounded-xl border border-white/5 bg-white/[0.02] overflow-hidden"
+                :class="record.acked ? 'opacity-60' : ''"
               >
                 <header class="flex flex-wrap items-center gap-2 px-3.5 py-2 border-b border-white/5">
                   <span
                     class="text-[10px] font-mono px-1.5 py-0.5 rounded-md border shrink-0"
-                    :class="meta(record.severity).chip"
+                    :class="
+                      record.acked
+                        ? 'bg-slate-500/15 text-slate-400 border-white/10'
+                        : meta(record.severity).chip
+                    "
                   >
-                    {{ meta(record.severity).label }}
+                    {{ record.acked ? '已消除' : meta(record.severity).label }}
                   </span>
                   <span class="text-[10px] font-mono text-slate-500">
                     {{ formatDateTime(record.created_at) }}
@@ -822,6 +883,28 @@ onUnmounted(() => {
                   >
                     {{ recordContext(record) }}
                   </span>
+                  <button
+                    v-if="record.acked"
+                    class="ml-auto shrink-0 rounded-md border border-white/10 px-1.5 py-0.5 text-[10px] font-mono text-slate-400 transition hover:border-white/20 hover:text-slate-200 disabled:opacity-50"
+                    :disabled="recordBusy === recordBusyKey(record)"
+                    @click="restoreRecord(record, $event)"
+                  >
+                    恢复
+                  </button>
+                  <button
+                    v-else-if="record.severity === 'error' || record.severity === 'warn'"
+                    class="ml-auto flex shrink-0 items-center gap-1 rounded-md border px-1.5 py-0.5 text-[10px] font-mono transition disabled:opacity-50"
+                    :class="
+                      record.severity === 'error'
+                        ? 'border-rose-400/30 text-rose-200 hover:bg-rose-500/15'
+                        : 'border-amber-400/30 text-amber-200 hover:bg-amber-500/15'
+                    "
+                    :disabled="recordBusy === recordBusyKey(record)"
+                    @click="ackRecord(record, $event)"
+                  >
+                    <Icon name="check" :size="10" class="shrink-0" />
+                    {{ recordBusy === recordBusyKey(record) ? '处理中…' : '消除报警' }}
+                  </button>
                 </header>
                 <div class="px-3.5 py-3">
                   <div class="md-preview" v-html="renderMarkdown(record.message || '')" />

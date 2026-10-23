@@ -57,6 +57,17 @@ function clean(obj) {
   return out
 }
 
+/**
+ * 把后端返回的站内路径（如 /api/favicons/3.png）解析到当前 API 前缀。
+ * 生产环境 VITE_API_BASE 可能是绝对地址（前后端不同源），不能直接写死 /api。
+ */
+export function assetUrl(path) {
+  if (!path) return ''
+  if (/^[a-z][a-z0-9+.-]*:/i.test(path) || path.startsWith('//')) return path
+  if (path.startsWith('/api/')) return `${BASE}${path.slice(4)}`
+  return path
+}
+
 export const api = {
   /* ----------------------------- 书签 ----------------------------- */
   bookmarks: {
@@ -65,6 +76,8 @@ export const api = {
     update: (id, data) => request(`/bookmarks/${id}`, { method: 'PUT', body: clean(data) }),
     remove: (id) => request(`/bookmarks/${id}`, { method: 'DELETE' }),
     visit: (id) => request(`/bookmarks/${id}/visit`, { method: 'POST' }),
+    // 右键「更新图标」：后端重新抓取站点图标，拿不到则清空（前端回退首字母）
+    refreshFavicon: (id) => request(`/bookmarks/${id}/favicon`, { method: 'POST' }),
   },
 
   /* ----------------------------- 待办 ----------------------------- */
@@ -88,6 +101,16 @@ export const api = {
       )
       return request(`/monitor/servers${qs.toString() ? `?${qs}` : ''}`)
     },
+    // 消除单条消息：只记录被消除的上报，不牵连同服务器的其他报警。
+    ackRecord: (serverName, recordId, data = {}) =>
+      request(`/monitor/servers/${encodeURIComponent(serverName)}/records/${recordId}/ack`, {
+        method: 'POST',
+        body: clean(data),
+      }),
+    restoreRecord: (serverName, recordId) =>
+      request(`/monitor/servers/${encodeURIComponent(serverName)}/records/${recordId}/ack`, {
+        method: 'DELETE',
+      }),
   },
 
   /* ----------------------------- 账本 ----------------------------- */

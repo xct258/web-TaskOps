@@ -25,7 +25,12 @@ from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 from zoneinfo import ZoneInfo
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
+from pydantic import BaseModel
+from sqlmodel import Session, select
+
+from db import get_monitor_session
+from models import MonitorRecordAck, shanghai_now
 
 router = APIRouter()
 
@@ -40,6 +45,12 @@ MAX_RECORDS = 5000
 
 SEVERITY_RANK = {"error": 0, "warn": 1, "ok": 2, "info": 3}
 VALID_STATUS = {"ok", "warn", "error", "info"}
+
+
+class AckPayload(BaseModel):
+    """记录 id 缺失时用上报时间兜底，避免误消除别的消息。"""
+
+    created_at: str = ""
 
 
 def _push_get(path: str, params: Optional[Dict[str, Any]] = None) -> dict:
@@ -115,8 +126,37 @@ def _record_sort_key(record: dict):
     return (_created_at(record), record_id)
 
 
-def group_records(records: List[dict]) -> List[dict]:
-    """按 server_name 分组；最新一条在 latest，全部记录在 records 供弹窗按项目/脚本分组分页。"""
+def _record_id(record: dict) -> int:
+    try:
+        return int(record.get("id") or 0)
+    except (TypeError, ValueError):
+        return 0
+
+
+def _ack_key(server_name: str, record: dict) -> tuple:
+    """单条记录的消除键：有 id 用 id，没有 id 才退回上报时间。"""
+    record_id = _record_id(record)
+    if record_id:
+        return (server_name, record_id, "")
+    return (server_name, 0, _created_at(record))
+
+
+def _ack_row_key(row: MonitorRecordAck) -> tuple:
+    if row.record_id:
+        return (row.server_name, row.record_id, "")
+    return (row.server_name, 0, row.record_created_at)
+
+
+def group_records(
+    records: List[dict],
+    acks: Optional[set] = None,
+) -> List[dict]:
+    """按 server_name 分组；最新一条在 latest，全部记录在 records 供弹窗按项目/脚本分组分页。
+
+    ``acks`` 是已消除的单条记录集合。被消除的记录仍保留在 records 里（标记 acked），
+    但不参与卡片摘要：卡片显示剩下最新的一条，避免一条报警被消除后整台服务器都变正常。
+    """
+    acks = acks or set()
     groups: Dict[str, dict] = {}
 
     for record in records:
@@ -128,16 +168,24 @@ def group_records(records: List[dict]) -> List[dict]:
     for group in groups.values():
         group["records"].sort(key=_record_sort_key, reverse=True)
         group["records"] = [
-            {**record, "severity": detect_severity(record)}
+            {
+                **record,
+                "severity": detect_severity(record),
+                "acked": _ack_key(group["server_name"], record) in acks,
+            }
             for record in group["records"]
         ]
 
-        latest = group["records"][0]
+        active = [record for record in group["records"] if not record["acked"]]
+        all_acked = bool(group["records"]) and not active
+        latest = active[0] if active else group["records"][0]
         result.append(
             {
                 "server_name": group["server_name"],
                 "topic": latest.get("topic") or "",
-                "severity": latest["severity"],
+                "severity": latest["severity"] if active else "ok",
+                "all_acked": all_acked,
+                "acked_count": len(group["records"]) - len(active),
                 "latest": latest,
                 "count": len(group["records"]),
                 "records": group["records"],
@@ -156,10 +204,12 @@ def list_servers(
         None, description="按最新一条的级别筛选：error / warn / ok / info"
     ),
     q: Optional[str] = Query(None, description="按服务器名 / 主题 / 标题 / 消息搜索"),
+    session: Session = Depends(get_monitor_session),
 ):
     """返回按服务器分组的摘要：最新一条、状态、记录数和全部记录。"""
     records = fetch_records()
-    servers = group_records(records)
+    acks = {_ack_row_key(row) for row in session.exec(select(MonitorRecordAck)).all()}
+    servers = group_records(records, acks)
 
     if severity:
         wanted = severity.strip().lower()
@@ -190,6 +240,66 @@ def list_servers(
         "records_total": len(records),
         "fetched_at": datetime.now(ZoneInfo("Asia/Shanghai")).strftime("%Y-%m-%d %H:%M:%S"),
     }
+
+
+@router.post("/monitor/servers/{server_name}/records/{record_id}/ack")
+def ack_record(
+    server_name: str,
+    record_id: int,
+    payload: AckPayload,
+    session: Session = Depends(get_monitor_session),
+):
+    """消除一条具体消息：只标记这条上报，不牵连同服务器的其他报警。"""
+    name = server_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="server_name 不能为空")
+
+    rid = max(0, record_id)
+    created_at = payload.created_at.strip()
+    statement = select(MonitorRecordAck).where(
+        MonitorRecordAck.server_name == name,
+        MonitorRecordAck.record_id == rid,
+    )
+    # id 缺失（0）时才用上报时间区分同服务器的多条记录。
+    if not rid:
+        statement = statement.where(MonitorRecordAck.record_created_at == created_at)
+
+    row = session.exec(statement).first()
+    if row is None:
+        row = MonitorRecordAck(server_name=name, record_id=rid)
+
+    if created_at:
+        row.record_created_at = created_at
+    row.acked_at = shanghai_now()
+    session.add(row)
+    session.commit()
+
+    return {"ok": True, "server_name": name, "record_id": rid}
+
+
+@router.delete("/monitor/servers/{server_name}/records/{record_id}/ack")
+def restore_record(
+    server_name: str,
+    record_id: int,
+    session: Session = Depends(get_monitor_session),
+):
+    """恢复一条消息：删除这条消除记录，让它重新参与卡片摘要。"""
+    name = server_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="server_name 不能为空")
+
+    rows = session.exec(
+        select(MonitorRecordAck).where(
+            MonitorRecordAck.server_name == name,
+            MonitorRecordAck.record_id == max(0, record_id),
+        )
+    ).all()
+    for row in rows:
+        session.delete(row)
+    if rows:
+        session.commit()
+
+    return {"ok": True, "server_name": name, "record_id": max(0, record_id)}
 
 
 @router.get("/monitor/records")

@@ -11,7 +11,7 @@ from typing import Dict, List, Optional
 from zoneinfo import ZoneInfo
 
 from sqlalchemy import Column, JSON
-from pydantic import field_serializer
+from pydantic import computed_field, field_serializer
 from sqlmodel import Field, SQLModel
 
 
@@ -81,6 +81,8 @@ class TodoCompletion(SQLModel, table=True):
 
 
 # 书签。tags 存 JSON 数组；PUT 支持逗号字符串自动转数组。
+# 站点图标由后端抓取后缓存在 data/favicons/，这里只记文件名与类型；
+# 前端通过 favicon_url（计算字段）读取，没有图标就回退到首字母样式。
 class Bookmark(SQLModel, table=True):
 
     id: Optional[int] = Field(default=None, primary_key=True)
@@ -93,6 +95,20 @@ class Bookmark(SQLModel, table=True):
     )
     visit_count: int = Field(default=0)
     created_at: date = Field(default_factory=date.today)
+
+    # 图标缓存（后端维护，前端只读）：文件名如 "3.png"，位于 data/favicons/
+    favicon_file: Optional[str] = Field(default=None)
+    favicon_mime: Optional[str] = Field(default=None)
+    favicon_updated_at: Optional[datetime] = Field(default=None)
+
+    @computed_field
+    @property
+    def favicon_url(self) -> Optional[str]:
+        """图标访问路径。带版本号（毫秒），刷新后浏览器不会命中旧缓存。"""
+        if not self.favicon_file:
+            return None
+        version = int(self.favicon_updated_at.timestamp() * 1000) if self.favicon_updated_at else 0
+        return f"/api/favicons/{self.favicon_file}?v={version}"
 
 
 # 账本流水。写操作会自动同步 Asset/Liability，见 utils.ledger_effect。
@@ -185,3 +201,18 @@ class InventoryMovement(SQLModel, table=True):
     reason: str = Field(default="调整")
     note: Optional[str] = Field(default=None)
     created_at: datetime = Field(default_factory=shanghai_now)
+
+
+class MonitorRecordAck(SQLModel, table=True):
+    """单条报警的消除记录：只影响对应的那条上报，不牵连同服务器的其他消息。
+
+    同一个 (server_name, record_id) 只保留一条；记录 id 缺失时用上报时间兜底。
+    """
+
+    id: Optional[int] = Field(default=None, primary_key=True)
+
+    server_name: str = Field(index=True)
+    record_id: int = Field(default=0, index=True)
+    record_created_at: str = Field(default="")
+    acked_at: datetime = Field(default_factory=shanghai_now)
+

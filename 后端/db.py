@@ -11,7 +11,19 @@ from pathlib import Path
 
 from sqlmodel import Session, SQLModel, create_engine
 
-from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Liability, MindMap, Note, Todo, TodoCompletion
+from models import (
+    Asset,
+    Bookmark,
+    InventoryItem,
+    InventoryMovement,
+    Ledger,
+    Liability,
+    MindMap,
+    MonitorRecordAck,
+    Note,
+    Todo,
+    TodoCompletion,
+)
 
 # ---------------------------------------------------------------------------
 # 路径：以本文件所在目录为基准，data/ 与代码同级
@@ -19,6 +31,10 @@ from models import Asset, Bookmark, InventoryItem, InventoryMovement, Ledger, Li
 BASE_DIR = Path(__file__).resolve().parent
 DATA_DIR = BASE_DIR / "data"
 DATA_DIR.mkdir(exist_ok=True)
+
+# 书签图标缓存目录（main.py 挂到 /api/favicons 供前端读取）
+FAVICON_DIR = DATA_DIR / "favicons"
+FAVICON_DIR.mkdir(exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # 各域数据库 URL（新增业务域时在这里加一行，并在 ENGINES 里注册）
@@ -30,6 +46,7 @@ DATABASE_URLS = {
     "note": f"sqlite:///{DATA_DIR / 'notes.db'}",
     "mindmap": f"sqlite:///{DATA_DIR / 'mindmaps.db'}",
     "inventory": f"sqlite:///{DATA_DIR / 'inventory.db'}",
+    "monitor": f"sqlite:///{DATA_DIR / 'monitor.db'}",
 }
 
 # 每个文件一个引擎；SQLite 单线程校验关掉以支持多线程 serve
@@ -45,6 +62,7 @@ ledger_engine = ENGINES["ledger"]
 note_engine = ENGINES["note"]
 mindmap_engine = ENGINES["mindmap"]
 inventory_engine = ENGINES["inventory"]
+monitor_engine = ENGINES["monitor"]
 
 
 def make_session_getter(engine, *tables, name="session"):
@@ -69,9 +87,13 @@ def make_session_getter(engine, *tables, name="session"):
 
 
 def init_db() -> None:
-    """根据当前模型创建各业务表。"""
+    """根据当前模型创建各业务表。
+
+    开发阶段改表结构不写迁移：删掉 data/ 下对应的 .db（或表）后重启即可重建。
+    """
     SQLModel.metadata.create_all(todo_engine, tables=[Todo.__table__, TodoCompletion.__table__])
     SQLModel.metadata.create_all(bookmark_engine, tables=[Bookmark.__table__])
+
     SQLModel.metadata.create_all(
         ledger_engine,
         tables=[Ledger.__table__, Asset.__table__, Liability.__table__],
@@ -79,6 +101,7 @@ def init_db() -> None:
     SQLModel.metadata.create_all(note_engine, tables=[Note.__table__])
     SQLModel.metadata.create_all(mindmap_engine, tables=[MindMap.__table__])
     SQLModel.metadata.create_all(inventory_engine, tables=[InventoryItem.__table__, InventoryMovement.__table__])
+    SQLModel.metadata.create_all(monitor_engine, tables=[MonitorRecordAck.__table__])
 
 
 # ---------------------------------------------------------------------------
@@ -102,4 +125,7 @@ get_mindmap_session = make_session_getter(
 )
 get_inventory_session = make_session_getter(
     inventory_engine, InventoryItem.__table__, InventoryMovement.__table__, name="inventory"
+)
+get_monitor_session = make_session_getter(
+    monitor_engine, MonitorRecordAck.__table__, name="monitor"
 )

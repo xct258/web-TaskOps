@@ -22,8 +22,9 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
 
-from db import init_db
+from db import FAVICON_DIR, init_db
 from routers import bookmarks, inventory, ledger, mindmaps, monitor, notes, todos
 
 
@@ -61,6 +62,10 @@ app.include_router(ledger.router, prefix="/api")
 app.include_router(notes.router, prefix="/api")
 app.include_router(mindmaps.router, prefix="/api")
 app.include_router(inventory.router, prefix="/api")
+
+# 书签图标缓存：后端抓取后落盘到 data/favicons/，前端只读这里，不再直连第三方。
+# 路径带 /api 前缀，开发走 vite 代理、生产与前端同源时都能直接命中。
+app.mount("/api/favicons", StaticFiles(directory=FAVICON_DIR), name="favicons")
 
 
 @app.get("/docs", include_in_schema=False)

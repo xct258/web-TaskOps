@@ -7,16 +7,18 @@
 
 | 模块 | 路由 | 对应后端接口 |
 | --- | --- | --- |
-| 书签 | `/#/bookmarks` | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{id}`、`POST /api/bookmarks/{id}/visit` |
+| 书签 | `/#/bookmarks` | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{id}`、`POST /api/bookmarks/{id}/visit`、`POST /api/bookmarks/{id}/favicon` |
+
+书签卡片优先显示后端缓存的站点图标（`favicon_url`，位于 `/api/favicons/`）；没有图标或加载失败时回退到「首字母 + 渐变」徽章。图标只在新建书签时试抓一次，之后改由卡片右键菜单「更新图标」手动触发，前端不会直连任何第三方图标服务。
 | 待办 | `/#/todos` | `GET/POST /api/todos`、`PUT/DELETE /api/todos/{id}`、`processed` / `undo` / `snooze` |
-| 服务信息 | `/#/server` | `GET /api/monitor/servers`（后端代理 push-server `/records`，按服务器分组展示摘要，点击卡片在弹窗中左右分栏：左侧切换项目和项目下的服务，右侧查看当前范围记录并分页） |
+| 服务信息 | `/#/server` | `GET /api/monitor/servers`（后端代理 push-server `/records`，按服务器分组展示摘要，点击卡片在弹窗中左右分栏：左侧切换项目和项目下的服务，右侧查看当前范围记录并分页；每条报警可单独消除） |
 | 账本 | `/#/ledger` | `GET/POST/PUT/DELETE /api/ledger`、`GET/POST /api/asset`、`/api/liability` |
 | 笔记 | `/#/notes` | `GET/POST /api/notes`、`PUT/DELETE /api/notes/{id}`（Markdown 渲染） |
 | 思维导图 | `/#/mindmaps` | `GET/POST /api/mindmaps`、`PUT/DELETE /api/mindmaps/{id}`（前端解析缩进大纲并自动布局） |
 
 顶部状态胶囊（资产 / 服务异常数 / 待办进度）取自各模块接口的汇总，点击可跳转到对应模块。
 
-服务页不直接连 push-server（对方没有 CORS），而是走后端 `GET /api/monitor/servers`；后端再读 push-server 的 `GET /records`，所以现有服务器上报脚本无需改动。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）；`POST /api/push` 必须带 `title` 和 `status`（`ok` / `warn` / `error` / `info`），页面按 `status` 显示级别、按 `title` 显示脚本名；卡片只显示摘要，点击后弹窗左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前选中的项目/服务记录，每页 5 条；左侧同时提供「全部项目」和「全部服务」查看汇总。移动端隐藏左侧栏，改为服务器名称旁边的按钮；按钮显示当前项目/服务，点击后弹出选择弹窗。
+服务页不直接连 push-server（对方没有 CORS），而是走后端 `GET /api/monitor/servers`；后端再读 push-server 的 `GET /records`，所以现有服务器上报脚本无需改动。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）；`POST /api/push` 必须带 `title` 和 `status`（`ok` / `warn` / `error` / `info`），页面按 `status` 显示级别、按 `title` 显示脚本名；卡片只显示摘要，点击后弹窗左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前选中的项目/服务记录，每页 5 条；左侧同时提供「全部项目」和「全部服务」查看汇总。移动端隐藏左侧栏，改为服务器名称旁边的按钮；按钮显示当前项目/服务，点击后弹出选择弹窗。消息列表里每条报警的「消除报警」只作用于那条记录，不牵连同服务器的其他报警；原始记录仍保留，点「恢复」可以让它重新参与报警判断。
 
 ## 目录结构
 
