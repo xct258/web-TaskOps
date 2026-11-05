@@ -503,7 +503,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
     <!-- 工具条 -->
     <div class="flex-shrink-0 flex flex-wrap items-center gap-2 mb-2">
       <div
-        class="min-w-0 flex-1 flex items-center gap-1.5 overflow-x-auto no-scrollbar overscroll-x-contain snap-x snap-mandatory pb-1 text-xs font-mono"
+        class="w-full sm:w-auto sm:flex-1 min-w-0 flex items-center gap-1.5 overflow-x-auto no-scrollbar overscroll-x-contain snap-x snap-mandatory pb-1 text-xs font-mono"
         role="tablist"
         aria-label="待办状态筛选"
       >
@@ -525,31 +525,33 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
         </button>
       </div>
 
-      <button
-        class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition ml-auto"
-        title="搜索（/）"
-        @click="toggleSearch"
-      >
-        <Icon name="search" :size="13" />
-      </button>
-      <div v-if="searchOpen" class="relative min-w-[100px] max-w-[180px]">
-        <input
-          ref="searchEl"
-          v-model="search"
-          type="text"
-          placeholder="搜索"
-          class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-sky-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
-          @keydown.esc="closeSearch"
-        />
-      </div>
+      <div class="flex items-center gap-2 ml-auto">
+        <button
+          class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
+          title="搜索（/）"
+          @click="toggleSearch"
+        >
+          <Icon name="search" :size="13" />
+        </button>
+        <div v-if="searchOpen" class="relative min-w-[100px] max-w-[180px]">
+          <input
+            ref="searchEl"
+            v-model="search"
+            type="text"
+            placeholder="搜索"
+            class="w-full px-2.5 py-1 bg-slate-900/60 border border-white/10 focus:border-sky-400 rounded-lg text-xs text-white placeholder-slate-500 focus:outline-none transition"
+            @keydown.esc="closeSearch"
+          />
+        </div>
 
-      <button
-        class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-600/80 hover:bg-sky-600 text-white text-xs font-mono transition border border-sky-400/30 shadow-lg shadow-sky-500/10"
-        @click="openAdd"
-      >
-        <Icon name="plus" :size="14" />
-        <span class="hidden xs:inline">新建待办</span>
-      </button>
+        <button
+          class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl bg-sky-600/80 hover:bg-sky-600 text-white text-xs font-mono transition border border-sky-400/30 shadow-lg shadow-sky-500/10"
+          @click="openAdd"
+        >
+          <Icon name="plus" :size="14" />
+          <span class="hidden xs:inline">新建待办</span>
+        </button>
+      </div>
     </div>
 
     <!-- 列表 -->
