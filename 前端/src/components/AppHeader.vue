@@ -3,11 +3,10 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 
 import Icon from '@/components/Icon.vue'
-import { loadSummary, summary } from '@/composables/useSummary'
-import { refreshWallpaper, wallpaperBusy } from '@/composables/useWallpaper'
+import SummaryPills from '@/components/SummaryPills.vue'
+import { loadSummary } from '@/composables/useSummary'
 import { useWeather } from '@/composables/useWeather'
 import { NAV_ITEMS } from '@/router'
-import { formatCompact } from '@/utils/format'
 
 const router = useRouter()
 const route = useRoute()
@@ -56,7 +55,7 @@ function go(path) {
 </script>
 
 <template>
-  <header class="flex-shrink-0 flex items-center justify-between gap-3 pb-2.5 border-b border-white/10">
+  <header class="flex-shrink-0 flex items-center justify-between gap-2 sm:gap-3 pb-2.5 border-b border-white/10">
     <!-- Logo + 汇总状态胶囊 -->
     <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden flex-shrink-0">
       <!-- 极简排印 Logo：宽字距等宽大写 + 末尾小色块，无装饰图形 -->
@@ -72,56 +71,12 @@ function go(path) {
       </button>
 
       <div class="hidden sm:flex items-center gap-1.5 font-mono text-[11px]">
-        <!-- 资产 -->
-        <button
-          class="flex items-center gap-1 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
-          title="资金余额 · 前往账本"
-          @click="go('/ledger')"
-        >
-          <span class="text-amber-400 font-bold">¥</span>
-          <span>{{ summary.asset == null ? '—' : formatCompact(summary.asset) }}</span>
-          <span v-if="summary.liability" class="text-rose-400 text-[10px]">
-            负债 {{ formatCompact(summary.liability) }}
-          </span>
-        </button>
-
-        <!-- 服务信息 -->
-        <button
-          class="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-300 transition"
-          title="前往服务信息"
-          @click="go('/server')"
-        >
-          <span
-            class="h-1.5 w-1.5 rounded-full"
-            :class="
-              summary.monitorErrors
-                ? 'bg-rose-400 animate-pulse'
-                : summary.monitorWarns
-                  ? 'bg-amber-400'
-                  : summary.monitorTotal
-                    ? 'bg-emerald-400'
-                    : 'bg-slate-500'
-            "
-          />
-          <span v-if="summary.monitorErrors">{{ summary.monitorErrors }} 台异常</span>
-          <span v-else-if="summary.monitorWarns">{{ summary.monitorWarns }} 台告警</span>
-          <span v-else-if="summary.monitorTotal">{{ summary.monitorNormal }}/{{ summary.monitorTotal }} 正常</span>
-          <span v-else>暂无上报</span>
-        </button>
-
-        <!-- 待办：有逾期时红色提醒 -->
-        <button
-          class="flex items-center gap-1 px-2 py-0.5 rounded-lg border transition"
-          :class="summary.todoOverdue > 0 ? 'bg-rose-500/15 border-rose-400/50 text-rose-200' : 'bg-white/5 hover:bg-white/10 border-white/10 text-slate-300'"
-          title="前往待办"
-          @click="go('/todos')"
-        >
-          <span v-if="summary.todoOverdue > 0" class="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
-          <span v-else class="text-sky-400">✓</span>
-          <span>{{ summary.todoTotal }}/{{ summary.todoOverdue }} 待办</span>
-        </button>
+        <SummaryPills />
       </div>
     </div>
+
+    <!-- 移动端：压缩成一行文字，跟在 Logo 后面，不额外占高度 -->
+    <SummaryPills compact class="sm:hidden flex-1" />
 
     <!-- 天气 -->
     <div class="flex items-center gap-2 sm:gap-3.5 font-mono flex-shrink-0">
@@ -137,14 +92,6 @@ function go(path) {
           <span class="text-[9px] text-slate-400 truncate max-w-[68px] mt-0.5">{{ city }}</span>
         </div>
       </div>
-
-      <button
-        class="p-1.5 rounded-xl bg-slate-900/60 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition"
-        title="更换随机壁纸"
-        @click="refreshWallpaper"
-      >
-        <Icon name="refresh" :size="15" :class="{ 'animate-spin': wallpaperBusy }" />
-      </button>
 
       <!-- 导航菜单：所有模块收进下拉面板 -->
       <div ref="menuWrap" class="relative">
