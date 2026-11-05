@@ -38,6 +38,8 @@ PUSH_SERVER_URL = os.environ.get(
     "PUSH_SERVER_URL", "https://push-server.o1-1.xct258.top"
 ).rstrip("/")
 PUSH_TIMEOUT = float(os.environ.get("PUSH_SERVER_TIMEOUT", "10"))
+# push-server 开启页面密码后，服务间读取 /records、/api/health 需要带 X-Push-Token
+PUSH_SERVER_TOKEN = os.environ.get("PUSH_SERVER_TOKEN", "")
 
 # /records 单页上限 500；上限兜底防止对端异常时无限翻页。
 PAGE_SIZE = 500
@@ -60,6 +62,8 @@ def _push_get(path: str, params: Optional[Dict[str, Any]] = None) -> dict:
         url = f"{url}?{urlencode(params)}"
 
     request = Request(url, headers={"Accept": "application/json"})
+    if PUSH_SERVER_TOKEN:
+        request.add_header("X-Push-Token", PUSH_SERVER_TOKEN)
     try:
         with urlopen(request, timeout=PUSH_TIMEOUT) as response:
             body = response.read().decode("utf-8")

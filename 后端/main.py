@@ -26,6 +26,7 @@ from fastapi.staticfiles import StaticFiles
 
 from db import FAVICON_DIR, init_db
 from routers import bookmarks, inventory, ledger, mindmaps, monitor, notes, todos
+import auth
 
 
 @asynccontextmanager
@@ -53,6 +54,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# 访问密码（APP_PASSWORD）：未设置时保持开放；设置后除 /api/auth/* 外都要求登录。
+app.add_middleware(auth.AuthMiddleware)
+app.include_router(auth.router)
 
 # 路由挂载（统一挂到 /api 前缀，便于 nginx/NPM 反代且与前端同源）
 app.include_router(todos.router, prefix="/api")

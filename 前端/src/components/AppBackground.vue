@@ -1,15 +1,14 @@
 <script setup>
-import { wallpaper, wallpaperFading, wallpaperNext, wallpaperReady } from '@/composables/useWallpaper'
+import { wallpaper, wallpaperFading, wallpaperNext } from '@/composables/useWallpaper'
 </script>
 
 <template>
   <!-- 动态壁纸 + 轻调光：无暗角，壁纸全幅清晰 -->
   <div class="fixed inset-0 z-0 pointer-events-none select-none overflow-hidden">
-    <!-- 底层：当前壁纸 -->
-    <!-- 就绪前不挂背景图，避免看到渐进加载；预加载已命中缓存，就绪后瞬间呈现 -->
+    <!-- 底层：当前壁纸（提前挂载，配合加载页把渐进加载藏在遮罩后面） -->
     <div
       class="absolute inset-0 bg-cover bg-center bg-no-repeat"
-      :style="wallpaperReady ? { backgroundImage: wallpaper } : {}"
+      :style="{ backgroundImage: wallpaper }"
     />
     <!-- 顶层：切换时铺新图并淡入（background-image 本身不可过渡，靠 opacity 交叉淡入） -->
     <div

@@ -60,13 +60,16 @@ rm -rf "/opt/${NODE_DIST}" /root/.npm
 
 # 后端（拆分后的 FastAPI 工程：入口 + 数据库/模型/工具 + 各业务路由）
 wget -O /opt/taskops/后端/main.py "$RAW/后端/main.py"
+wget -O /opt/taskops/后端/auth.py "$RAW/后端/auth.py"
 wget -O /opt/taskops/后端/db.py "$RAW/后端/db.py"
 wget -O /opt/taskops/后端/models.py "$RAW/后端/models.py"
 wget -O /opt/taskops/后端/utils.py "$RAW/后端/utils.py"
 wget -O /opt/taskops/后端/favicon.py "$RAW/后端/favicon.py"
+wget -O /opt/taskops/后端/push_sync.py "$RAW/后端/push_sync.py"
 wget -O /opt/taskops/后端/routers/todos.py "$RAW/后端/routers/todos.py"
 wget -O /opt/taskops/后端/routers/bookmarks.py "$RAW/后端/routers/bookmarks.py"
-wget -O /opt/taskops/后端/routers/server.py "$RAW/后端/routers/server.py"
+wget -O /opt/taskops/后端/routers/monitor.py "$RAW/后端/routers/monitor.py"
 wget -O /opt/taskops/后端/routers/ledger.py "$RAW/后端/routers/ledger.py"
 wget -O /opt/taskops/后端/routers/notes.py "$RAW/后端/routers/notes.py"
 wget -O /opt/taskops/后端/routers/mindmaps.py "$RAW/后端/routers/mindmaps.py"
+wget -O /opt/taskops/后端/routers/inventory.py "$RAW/后端/routers/inventory.py"

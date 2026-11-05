@@ -5,4 +5,10 @@ services:
     network_mode: host
     volumes:
       - ./app:/app
+    environment:
+      - APP_PASSWORD=${APP_PASSWORD:-}
+      - APP_SECRET=${APP_SECRET:-}
+      - APP_SESSION_DAYS=${APP_SESSION_DAYS:-7}
+      - PUSH_SERVER_URL=${PUSH_SERVER_URL:-https://push-server.o1-1.xct258.top}
+      - PUSH_SERVER_TOKEN=${PUSH_SERVER_TOKEN:-}
     restart: always

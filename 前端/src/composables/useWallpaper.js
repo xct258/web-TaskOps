@@ -1,7 +1,23 @@
 import { ref } from 'vue'
 
-// 随机壁纸单例：临时换为 picsum。预加载，加载完成再切换，避免闪白。
-const BASE = 'https://picsum.photos/1920/1080'
+// 随机壁纸单例：临时换为 picsum。用固定 seed + localStorage 记住，避免每次刷新都换图。
+const PICSUM = 'https://picsum.photos'
+const STORAGE_KEY = 'portal-wallpaper-seed'
+
+function loadSeed() {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY)
+    if (saved) return saved
+  } catch (_) {}
+  const seed = Math.random().toString(36).slice(2, 10)
+  try {
+    localStorage.setItem(STORAGE_KEY, seed)
+  } catch (_) {}
+  return seed
+}
+
+let currentSeed = loadSeed()
+const BASE = `${PICSUM}/seed/${currentSeed}/1920/1080`
 
 export const wallpaper = ref(`url('${BASE}')`)
 // 顶层新图：预加载完成后先铺在上层（透明），再淡入到不透明，实现交叉过渡。
@@ -42,9 +58,14 @@ export function preloadWallpaper() {
 export function refreshWallpaper() {
   if (wallpaperBusy.value) return
   wallpaperBusy.value = true
+  const nextSeed = Math.random().toString(36).slice(2, 10)
   const img = new Image()
-  img.src = `${BASE}?t=${Date.now()}`
+  img.src = `${PICSUM}/seed/${nextSeed}/1920/1080`
   img.onload = () => {
+    currentSeed = nextSeed
+    try {
+      localStorage.setItem(STORAGE_KEY, nextSeed)
+    } catch (_) {}
     // 先把新图铺到顶层（opacity-0），下一拍再淡入，触发 transition。
     wallpaperNext.value = `url('${img.src}')`
     wallpaperFading.value = false

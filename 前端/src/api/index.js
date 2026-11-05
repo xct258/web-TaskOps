@@ -12,6 +12,12 @@ class ApiError extends Error {
   }
 }
 
+// 会话失效统一回调：useAuth 注册后，任何接口 401 都会切回登录页。
+let unauthorizedHandler = null
+export function onUnauthorized(fn) {
+  unauthorizedHandler = fn
+}
+
 async function request(path, { method = 'GET', body, signal } = {}) {
   const options = {
     method,
@@ -32,6 +38,7 @@ async function request(path, { method = 'GET', body, signal } = {}) {
   }
 
   if (!res.ok) {
+    if (res.status === 401) unauthorizedHandler?.()
     let detail = `${res.status} ${res.statusText}`
     try {
       const data = await res.json()
@@ -69,6 +76,13 @@ export function assetUrl(path) {
 }
 
 export const api = {
+  /* ----------------------------- 登录 ----------------------------- */
+  auth: {
+    status: () => request('/auth/status'),
+    login: (password) => request('/auth/login', { method: 'POST', body: { password } }),
+    logout: () => request('/auth/logout', { method: 'POST' }),
+  },
+
   /* ----------------------------- 书签 ----------------------------- */
   bookmarks: {
     list: () => request('/bookmarks'),

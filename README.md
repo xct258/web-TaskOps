@@ -208,7 +208,25 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 ---
 
-## 九、注意事项
+## 九、访问密码
+
+通过环境变量启用单密码登录（不设置 `APP_PASSWORD` 则保持原来的开放状态）：
+
+| 变量 | 说明 |
+| --- | --- |
+| `APP_PASSWORD` | 访问密码；留空 = 不启用 |
+| `APP_SECRET` | 会话 Cookie 签名密钥；留空则由密码派生（改密码会让所有会话失效） |
+| `APP_SESSION_DAYS` | 会话有效天数，默认 `7` |
+| `PUSH_SERVER_TOKEN` | 读取 push-server 记录用的服务间令牌，需与 push-server 一致 |
+
+- 登录成功后写入 `HttpOnly` + `SameSite=Lax` 会话 Cookie；HTTPS（含反代 `X-Forwarded-Proto`）下自动带 `Secure`。
+- 同一 IP 连续输错 5 次锁定 60 秒。
+- 未登录访问任何 `/api/*` 会返回 401，前端自动显示登录页；页面静态资源本身仍可访问。
+- 忘记密码时修改 `APP_PASSWORD` 并重启即可；修改后旧会话自动失效。
+
+`docker-compose.yml` 已接好这些变量，在仓库根目录放一个 `.env`（参考 `.env.example`）后 `docker compose up -d` 生效。
+
+## 十、注意事项
 
 - 后端 CORS 全开且无鉴权，**仅限内网使用，不要直接暴露公网**；对外请通过反代加访问控制。
 - 前端构建产物文件名自带哈希，改版后自动换新文件名，无需手动清缓存（强刷即可）。

@@ -1,20 +1,44 @@
 <script setup>
-import { onMounted, onUnmounted } from 'vue'
+import { computed, onMounted, onUnmounted, watch } from 'vue'
 
 import AppBackground from '@/components/AppBackground.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
+import LoginScreen from '@/components/LoginScreen.vue'
 import ToastHost from '@/components/ToastHost.vue'
+import { auth, loadAuth } from '@/composables/useAuth'
 import { loadSummary } from '@/composables/useSummary'
 import { preloadWallpaper, wallpaperReady } from '@/composables/useWallpaper'
 
 let timer = null
 
-onMounted(() => {
+// 登录状态和壁纸都就绪后才离开加载页：避免登录页/主界面先出现在空背景上。
+const ready = computed(() => auth.checked && wallpaperReady.value)
+
+function startSummary() {
   loadSummary()
-  preloadWallpaper()
+  if (timer) clearInterval(timer)
   timer = setInterval(loadSummary, 60000)
+}
+
+onMounted(() => {
+  preloadWallpaper()
+  loadAuth()
 })
+
+watch(
+  () => auth.authenticated,
+  (authenticated) => {
+    if (authenticated) {
+      startSummary()
+    } else if (timer) {
+      clearInterval(timer)
+      timer = null
+    }
+  },
+  { immediate: true },
+)
+
 onUnmounted(() => {
   if (timer) clearInterval(timer)
 })
@@ -23,13 +47,16 @@ onUnmounted(() => {
 <template>
   <AppBackground />
 
-  <!-- 首屏等待：壁纸就绪前只显示加载提示，不显示正文 -->
-  <div v-if="!wallpaperReady" class="relative z-10 h-full w-full flex items-center justify-center">
+  <!-- 壁纸和登录状态都就绪前保持加载页，避免登录页出现在空背景上 -->
+  <div v-if="!ready" class="relative z-10 h-full w-full flex items-center justify-center">
     <div class="text-center font-mono animate-pulse">
-      <div class="text-xl font-bold tracking-[0.3em] text-white">主页</div>
-      <div class="text-[10px] text-slate-500 tracking-[0.25em] mt-2">LOADING WALLPAPER…</div>
+      <div class="text-[10px] text-slate-500 tracking-[0.25em]">
+        {{ wallpaperReady ? 'CHECKING ACCESS…' : 'LOADING WALLPAPER…' }}
+      </div>
     </div>
   </div>
+
+  <LoginScreen v-else-if="!auth.authenticated" />
 
   <div
     v-else
