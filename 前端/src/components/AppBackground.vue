@@ -17,7 +17,13 @@ import { wallpaper, wallpaperFading, wallpaperNext } from '@/composables/useWall
       :class="wallpaperFading ? 'opacity-100' : 'opacity-0'"
       :style="{ backgroundImage: wallpaperNext }"
     />
-    <!-- 整体压暗：无暗角、无模糊，靠暗度保证内容可读 -->
-    <div class="absolute inset-0 bg-slate-950/75 md:bg-slate-950/70" />
+    <!-- 整体压暗 + 主题色氛围光：底色保持足够暗，保证正文可读 -->
+    <div
+      class="absolute inset-0"
+      :style="{
+        background:
+          'radial-gradient(ellipse at 50% -12%, rgba(var(--wp-accent-rgb), 0.18), transparent 58%), linear-gradient(180deg, rgba(2, 6, 23, 0.76), rgba(2, 6, 23, 0.84))',
+      }"
+    />
   </div>
 </template>

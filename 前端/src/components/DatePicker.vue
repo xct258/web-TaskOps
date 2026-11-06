@@ -108,7 +108,7 @@ onUnmounted(() => {
   <div class="relative">
     <button
       type="button"
-      class="w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-xs hover:border-indigo-400/50 transition"
+      class="accent-hover-border w-full flex items-center justify-between gap-2 px-3 py-1.5 bg-slate-950 border border-white/10 rounded-xl text-xs transition"
       :class="modelValue ? 'text-white' : 'text-slate-500'"
       :aria-expanded="open"
       @click.stop="toggle"
@@ -129,7 +129,7 @@ onUnmounted(() => {
         <div class="flex items-center justify-between gap-2 mb-3">
           <template v-if="mode === 'day'">
             <button type="button" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition" aria-label="上个月" @click="shiftMonth(-1)">‹</button>
-            <button type="button" class="px-2 py-1 rounded-lg text-xs font-semibold text-white tracking-wide hover:text-indigo-300 hover:bg-white/5 transition" aria-label="按年月选择" @click="mode = 'ym'">{{ monthTitle }}</button>
+            <button type="button" class="accent-hover-text px-2 py-1 rounded-lg text-xs font-semibold text-white tracking-wide hover:bg-white/5 transition" aria-label="按年月选择" @click="mode = 'ym'">{{ monthTitle }}</button>
             <button type="button" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition" aria-label="下个月" @click="shiftMonth(1)">›</button>
           </template>
           <template v-else>
@@ -148,7 +148,7 @@ onUnmounted(() => {
               <button
                 type="button"
                 class="w-full h-full rounded-lg text-[11px] font-mono transition"
-                :class="cell.selected ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : cell.currentMonth ? 'text-slate-300 hover:bg-white/10' : 'text-slate-500 hover:bg-white/10 hover:text-slate-300'"
+                :class="cell.selected ? 'accent-cell' : cell.currentMonth ? 'text-slate-300 hover:bg-white/10' : 'text-slate-500 hover:bg-white/10 hover:text-slate-300'"
                 :title="cell.date"
                 :aria-label="cell.date"
                 @click="selectDate(cell.date)"
@@ -164,7 +164,7 @@ onUnmounted(() => {
             :key="month"
             type="button"
             class="py-2.5 rounded-lg text-[11px] font-mono transition"
-            :class="isSelectedMonth(month) ? 'bg-indigo-600 text-white shadow-lg shadow-indigo-500/25' : 'text-slate-300 hover:bg-white/10'"
+            :class="isSelectedMonth(month) ? 'accent-cell' : 'text-slate-300 hover:bg-white/10'"
             :aria-label="`${viewYear}年${month}月`"
             @click="selectMonth(month)"
           >

@@ -65,10 +65,10 @@ function excerpt(content) {
     .slice(0, 90)
 }
 
-async function load() {
+async function load(force = false) {
   loading.value = true
   try {
-    notes.value = await api.notes.list()
+    notes.value = await api.notes.list({ force })
   } catch (err) {
     toast.error(`笔记加载失败：${err.message}`)
   } finally {
@@ -257,7 +257,7 @@ function onSearchKeydown(e) {
 onMounted(() => {
   pageMenu.setMenu([
     { key: 'new', label: '新建笔记', action: startNew },
-    { key: 'refresh', label: '刷新', action: load },
+    { key: 'refresh', label: '刷新', action: () => load(true) },
   ], '笔记')
   load()
   window.addEventListener('keydown', onSearchKeydown)

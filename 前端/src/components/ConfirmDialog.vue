@@ -29,8 +29,8 @@ const emit = defineEmits(['update:modelValue', 'confirm'])
           取消
         </button>
         <button
-          class="px-4 py-1.5 rounded-lg text-white font-medium transition"
-          :class="danger ? 'bg-rose-600 hover:bg-rose-500' : 'bg-indigo-600 hover:bg-indigo-500'"
+          class="px-4 py-1.5 rounded-lg font-medium transition"
+          :class="danger ? 'bg-rose-600 hover:bg-rose-500 text-white' : 'accent-button'"
           @click="emit('confirm')"
         >
           {{ confirmText }}

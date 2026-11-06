@@ -1,6 +1,6 @@
 import { reactive } from 'vue'
 
-import { api, onUnauthorized } from '@/api'
+import { api, clearApiCache, onUnauthorized } from '@/api'
 
 // 全局登录状态：App.vue 根据它决定显示登录页还是主界面。
 export const auth = reactive({
@@ -14,6 +14,7 @@ export const auth = reactive({
 // 任何接口返回 401（会话过期/被登出）都直接切回登录页，避免页面半残。
 onUnauthorized(() => {
   if (auth.enabled) auth.authenticated = false
+  clearApiCache()
 })
 
 export async function loadAuth() {
@@ -55,4 +56,5 @@ export async function signOut() {
   }
   auth.authenticated = false
   auth.error = ''
+  clearApiCache()
 }

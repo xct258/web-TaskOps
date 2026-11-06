@@ -422,10 +422,10 @@ function displayTopic(topic) {
   return String(topic || '').replace(/^server\//i, '') || '—'
 }
 
-async function load(silent = false) {
+async function load(silent = false, force = false) {
   if (!silent) loading.value = true
   try {
-    const data = await api.monitor.servers()
+    const data = await api.monitor.servers({}, { force })
     servers.value = data?.servers || []
     recordsTotal.value = data?.records_total || 0
     lastFetched.value = data?.fetched_at || ''
@@ -450,7 +450,7 @@ async function ackRecord(record, event) {
       created_at: record.created_at || '',
     })
     toast.success('已消除这条报警')
-    await load(true)
+    await load(true, true)
     loadSummary()
   } catch (err) {
     toast.error(`消除报警失败：${err.message}`)
@@ -467,7 +467,7 @@ async function restoreRecord(record, event) {
   try {
     await api.monitor.restoreRecord(selectedName.value, record.id ?? 0)
     toast.success('已恢复这条报警')
-    await load(true)
+    await load(true, true)
     loadSummary()
   } catch (err) {
     toast.error(`恢复报警失败：${err.message}`)
@@ -530,12 +530,12 @@ onMounted(() => {
   pageMenu.setMenu(
     [
       { key: 'help', label: '上报说明', action: () => (helpOpen.value = true) },
-      { key: 'refresh', label: '刷新', action: () => load() },
+      { key: 'refresh', label: '刷新', action: () => load(false, true) },
     ],
     '服务',
   )
   load()
-  timer = setInterval(() => load(true), 30000)
+  timer = setInterval(() => load(true, true), 30000)
   window.addEventListener('keydown', onSearchKeydown)
 })
 
@@ -592,7 +592,7 @@ onUnmounted(() => {
         <button
           class="p-1.5 rounded-xl bg-slate-900/60 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition"
           title="刷新"
-          @click="load()"
+          @click="load(false, true)"
         >
           <Icon name="refresh" :size="15" :class="{ 'animate-spin': loading }" />
         </button>

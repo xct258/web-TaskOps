@@ -25,11 +25,11 @@ export async function loadSummary() {
   summary.loading = true
   try {
     const [asset, liability, bookmarks, todos, monitors] = await Promise.all([
-      api.ledger.getAsset().catch(() => null),
-      api.ledger.getLiability().catch(() => null),
-      api.bookmarks.list().catch(() => []),
-      api.todos.list().catch(() => []),
-      api.monitor.servers().catch(() => ({ servers: [] })),
+      api.ledger.getAsset({ force: true }).catch(() => null),
+      api.ledger.getLiability({ force: true }).catch(() => null),
+      api.bookmarks.list({ force: true }).catch(() => []),
+      api.todos.list({ force: true }).catch(() => []),
+      api.monitor.servers({}, { force: true }).catch(() => ({ servers: [] })),
     ])
 
     const today = todayISO()

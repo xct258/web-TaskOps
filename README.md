@@ -191,6 +191,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 | 域 | 方法与路径 |
 | --- | --- |
+| 配置 | `GET /api/config`（前端运行时配置，如壁纸接口地址） |
 | 待办 | `GET/POST /api/todos`、`PUT/DELETE /api/todos/{rid}`、`PUT /api/todos/{rid}/processed`、`POST /api/todos/{rid}/undo`、`POST /api/todos/{rid}/snooze` |
 | 书签 | `GET/POST /api/bookmarks`、`PUT/DELETE /api/bookmarks/{bid}`、`POST /api/bookmarks/{bid}/visit`、`POST /api/bookmarks/{bid}/favicon`（重新抓取站点图标） |
 | 服务信息 | `GET /api/monitor/servers`（按服务器分组）、`GET /api/monitor/records`、`GET /api/monitor/health`、`POST/DELETE /api/monitor/servers/{server_name}/records/{record_id}/ack` |
@@ -232,6 +233,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | `APP_SECRET` | 会话 Cookie 签名密钥；留空则由密码派生（改密码会让所有会话失效） |
 | `APP_SESSION_DAYS` | 会话有效天数，默认 `7` |
 | `PUSH_SERVER_TOKEN` | 读取 push-server 记录用的服务间令牌，需与 push-server 一致 |
+| `WALLPAPER_API_URL` | 壁纸图片接口地址，默认 `https://random-image.xct258.top/`；直接返回图片的接口原样使用，也可写 `{seed}` / `{width}` / `{height}` 模板 |
 
 - 登录成功后写入 `HttpOnly` + `SameSite=Lax` 会话 Cookie；HTTPS（含反代 `X-Forwarded-Proto`）下自动带 `Secure`。
 - 同一 IP 连续输错 5 次锁定 60 秒。

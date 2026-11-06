@@ -18,7 +18,7 @@ const monitorText = computed(() => {
   return props.compact ? '无上报' : '暂无上报'
 })
 
-const chipBase = 'flex shrink-0 items-center whitespace-nowrap rounded-lg transition'
+const chipBase = 'accent-chip flex shrink-0 items-center whitespace-nowrap rounded-lg transition'
 const chipSkin = computed(() =>
   props.compact
     ? 'gap-1 px-1 py-1 leading-none font-mono text-[10px] text-slate-300 active:text-white'
@@ -37,7 +37,7 @@ const chipSkin = computed(() =>
       </span>
     </button>
 
-    <span v-if="compact" class="shrink-0 text-white/15">·</span>
+    <span v-if="compact" class="shrink-0" :style="{ color: 'rgba(var(--wp-accent-rgb), 0.45)' }">·</span>
 
     <!-- 服务信息 -->
     <button :class="[chipBase, chipSkin]" title="前往服务信息" @click="router.push('/server')">
@@ -56,7 +56,7 @@ const chipSkin = computed(() =>
       <span>{{ monitorText }}</span>
     </button>
 
-    <span v-if="compact" class="shrink-0 text-white/15">·</span>
+    <span v-if="compact" class="shrink-0" :style="{ color: 'rgba(var(--wp-accent-rgb), 0.45)' }">·</span>
 
     <!-- 待办：有逾期时红色提醒 -->
     <button
@@ -73,7 +73,7 @@ const chipSkin = computed(() =>
       @click="router.push('/todos')"
     >
       <span v-if="summary.todoOverdue > 0" class="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
-      <span v-else class="text-sky-400">✓</span>
+      <span v-else :style="{ color: 'var(--wp-accent)' }">✓</span>
       <span>{{ summary.todoTotal }}/{{ summary.todoOverdue }}{{ compact ? '' : ' ' }}待办</span>
     </button>
   </div>

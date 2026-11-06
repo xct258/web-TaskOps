@@ -27,7 +27,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from db import FAVICON_DIR, init_db
-from routers import bookmarks, inventory, ledger, mindmaps, monitor, notes, todos
+from routers import bookmarks, config, inventory, ledger, mindmaps, monitor, notes, todos
 import auth
 
 
@@ -62,6 +62,7 @@ app.add_middleware(auth.AuthMiddleware)
 app.include_router(auth.router)
 
 # 路由挂载（统一挂到 /api 前缀，便于 nginx/NPM 反代且与前端同源）
+app.include_router(config.router, prefix="/api")
 app.include_router(todos.router, prefix="/api")
 app.include_router(bookmarks.router, prefix="/api")
 app.include_router(monitor.router, prefix="/api")

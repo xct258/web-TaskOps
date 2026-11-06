@@ -147,10 +147,10 @@ const transformStyle = computed(() => ({
   transformOrigin: '0 0',
 }))
 
-async function load() {
+async function load(force = false) {
   loading.value = true
   try {
-    items.value = await api.mindmaps.list()
+    items.value = await api.mindmaps.list({ force })
   } catch (err) {
     toast.error(`导图加载失败：${err.message}`)
   } finally {
@@ -757,7 +757,7 @@ watch(canvasEl, (el) => {
 onMounted(() => {
   pageMenu.setMenu([
     { key: 'new', label: '新建导图', action: startNew },
-    { key: 'refresh', label: '刷新', action: load },
+    { key: 'refresh', label: '刷新', action: () => load(true) },
   ], '思维导图')
   load()
   window.addEventListener('keydown', onSearchKeydown)

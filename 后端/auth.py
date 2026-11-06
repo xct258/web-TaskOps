@@ -28,6 +28,8 @@ PUBLIC_PATHS = {
     "/api/auth/status",
     "/api/auth/login",
     "/api/auth/logout",
+    # 登录页之前就要加载壁纸，配置接口必须公开。
+    "/api/config",
 }
 # 登录页和前端静态资源必须公开，否则未登录时连登录页都加载不出来。
 PUBLIC_STATIC_PATHS = {"/", "/index.html", "/favicon.svg", "/favicon.ico"}

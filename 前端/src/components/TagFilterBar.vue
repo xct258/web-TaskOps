@@ -51,7 +51,9 @@ const skin = computed(() => SIZES[props.size] || SIZES.md)
 const chipClass = (value, highlight = false) => [
   CHIP,
   skin.value.chip,
-  highlight || props.active === value ? tone.value.active : tone.value.idle,
+  highlight || props.active === value
+    ? [tone.value.active, 'accent-chip-active']
+    : tone.value.idle,
 ]
 
 /* 测量用：整行的可用宽度（rowEl 是 flex-1 min-w-0，宽度由工具栏决定，与内容无关），

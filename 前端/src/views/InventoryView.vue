@@ -37,9 +37,9 @@ const visible = computed(() => {
   })
 })
 
-async function load() {
+async function load(force = false) {
   loading.value = true
-  try { items.value = await api.inventory.list() } catch (error) { toast.error(`库存加载失败：${error.message}`) } finally { loading.value = false }
+  try { items.value = await api.inventory.list({}, { force }) } catch (error) { toast.error(`库存加载失败：${error.message}`) } finally { loading.value = false }
 }
 
 function openAdd() {
@@ -143,7 +143,7 @@ function onSearchKeydown(event) {
 onMounted(() => {
   pageMenu.setMenu([
     { key: 'new', label: '添加物品', action: openAdd },
-    { key: 'refresh', label: '刷新', action: load },
+    { key: 'refresh', label: '刷新', action: () => load(true) },
   ], '库存')
   load()
   window.addEventListener('keydown', onSearchKeydown)

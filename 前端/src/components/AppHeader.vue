@@ -55,7 +55,10 @@ function go(path) {
 </script>
 
 <template>
-  <header class="flex-shrink-0 flex items-center justify-between gap-2 sm:gap-3 pb-2.5 border-b border-white/10">
+  <header
+    class="flex-shrink-0 flex items-center justify-between gap-2 sm:gap-3 pb-2.5 border-b transition-colors duration-500"
+    :style="{ borderBottomColor: 'rgba(var(--wp-accent-rgb), 0.22)' }"
+  >
     <!-- Logo + 汇总状态胶囊 -->
     <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden flex-shrink-0">
       <!-- 极简排印 Logo：宽字距等宽大写 + 末尾小色块，无装饰图形 -->
@@ -67,7 +70,7 @@ function go(path) {
         <h1 class="text-base sm:text-lg font-mono font-bold tracking-[0.3em] text-white leading-none">
           主页
         </h1>
-        <span class="h-1.5 w-1.5 rounded-[2px] bg-indigo-400" />
+        <span class="accent-dot h-1.5 w-1.5 rounded-[2px]" />
       </button>
 
       <div class="hidden sm:flex items-center gap-1.5 font-mono text-[11px]">

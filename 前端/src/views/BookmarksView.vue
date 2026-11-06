@@ -68,10 +68,10 @@ const renderModel = computed(() => {
 })
 
 
-async function load() {
+async function load(force = false) {
   loading.value = true
   try {
-    items.value = await api.bookmarks.list()
+    items.value = await api.bookmarks.list({ force })
   } catch (err) {
     toast.error(`书签加载失败：${err.message}`)
   } finally {
@@ -271,7 +271,7 @@ function onGlobalKeydown(e) {
 onMounted(() => {
   pageMenu.setMenu([
     { key: 'new', label: '新建书签', action: openAdd },
-    { key: 'refresh', label: '刷新', action: load },
+    { key: 'refresh', label: '刷新', action: () => load(true) },
   ], '书签')
   load()
   window.addEventListener('keydown', onGlobalKeydown)

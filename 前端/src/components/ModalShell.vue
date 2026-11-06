@@ -65,7 +65,7 @@ onUnmounted(removeKeydown)
         >
           <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/10 shrink-0">
             <div class="flex min-w-0 flex-1 items-center gap-2">
-              <Icon v-if="icon" :name="icon" :size="15" class="shrink-0 text-indigo-400" />
+              <Icon v-if="icon" :name="icon" :size="15" class="accent-text shrink-0" />
               <h3 class="min-w-0 truncate text-sm font-bold text-white font-mono">{{ title }}</h3>
               <slot name="header-actions" />
             </div>

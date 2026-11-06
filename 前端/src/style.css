@@ -3,6 +3,22 @@
 @tailwind utilities;
 
 /* ---------------------------------------------------------------------------
+   壁纸主题色：由 useWallpaper.js 根据图片接口响应头动态写入。
+   默认值使用原来的 indigo，接口不返回主题色时也能正常显示。
+--------------------------------------------------------------------------- */
+:root {
+  --wp-accent: #818cf8;
+  --wp-accent-rgb: 129, 140, 248;
+  --wp-on-accent: #0b1220;
+  --wp-contrast: 4.5;
+}
+
+::selection {
+  background: rgba(var(--wp-accent-rgb), 0.35);
+  color: #f8fafc;
+}
+
+/* ---------------------------------------------------------------------------
    全局基调：与 index.html 模板一致的“单视口锁定”控制台。
    页面本身不滚动，只有主内容区（.app-scroll）内部滚动。
 --------------------------------------------------------------------------- */
@@ -49,11 +65,11 @@ textarea {
     background: transparent;
   }
   .custom-scroll::-webkit-scrollbar-thumb {
-    background: rgba(255, 255, 255, 0.12);
+    background: rgba(var(--wp-accent-rgb), 0.2);
     border-radius: 9999px;
   }
   .custom-scroll::-webkit-scrollbar-thumb:hover {
-    background: rgba(255, 255, 255, 0.25);
+    background: rgba(var(--wp-accent-rgb), 0.42);
   }
 
   /* 隐藏滚动条但保留滚动 */
@@ -185,4 +201,259 @@ select option {
 .md-preview img {
   max-width: 100%;
   border-radius: 0.5rem;
+}
+
+/* ---------------------------------------------------------------------------
+   首屏加载页：等待壁纸完全加载/解码后再淡出，露出登录页
+--------------------------------------------------------------------------- */
+@keyframes taskops-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes taskops-bar {
+  0% {
+    left: -40%;
+  }
+  100% {
+    left: 110%;
+  }
+}
+@keyframes taskops-dot {
+  0%,
+  80%,
+  100% {
+    opacity: 0.2;
+  }
+  40% {
+    opacity: 1;
+  }
+}
+@keyframes taskops-pulse {
+  0%,
+  100% {
+    opacity: 0.55;
+    transform: scale(0.82);
+  }
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@keyframes taskops-rise {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.loading-screen > div:last-child {
+  animation: taskops-rise 0.5s ease-out both;
+}
+.loading-ring {
+  animation: taskops-spin 1.15s linear infinite;
+  border-top-color: var(--wp-accent);
+  border-right-color: var(--wp-accent);
+  transition: border-color 0.5s ease;
+}
+.loading-core {
+  background: var(--wp-accent);
+  box-shadow: 0 0 18px rgba(var(--wp-accent-rgb), 0.85);
+  animation: taskops-pulse 1.8s ease-in-out infinite;
+  transition:
+    background-color 0.5s ease,
+    box-shadow 0.5s ease;
+}
+.loading-bar {
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(var(--wp-accent-rgb), 0.9),
+    transparent
+  );
+  animation: taskops-bar 1.4s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+.loading-progress {
+  background: linear-gradient(
+    90deg,
+    rgba(var(--wp-accent-rgb), 0.45),
+    var(--wp-accent)
+  );
+  transition: width 0.2s ease-out;
+}
+.loading-dots span {
+  animation: taskops-dot 1.2s infinite;
+}
+.loading-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+.loading-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+.loading-fade-leave-active {
+  transition:
+    opacity 0.45s ease,
+    transform 0.45s ease;
+}
+.loading-fade-leave-to {
+  opacity: 0;
+  transform: scale(1.015);
+}
+
+/* 壁纸主题色通用元素 */
+.accent-dot {
+  background-color: var(--wp-accent);
+  box-shadow: 0 0 10px rgba(var(--wp-accent-rgb), 0.55);
+  transition:
+    background-color 0.5s ease,
+    box-shadow 0.5s ease;
+}
+.accent-focus:focus {
+  border-color: var(--wp-accent);
+}
+.accent-button {
+  background-color: var(--wp-accent);
+  color: var(--wp-on-accent);
+  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: 0 10px 30px -12px rgba(var(--wp-accent-rgb), 0.75);
+  transition:
+    background-color 0.5s ease,
+    color 0.5s ease,
+    filter 0.15s ease,
+    opacity 0.2s ease;
+}
+.accent-button:hover:not(:disabled) {
+  filter: brightness(1.08);
+}
+.accent-button:active:not(:disabled) {
+  filter: brightness(0.94);
+}
+.accent-chip {
+  transition:
+    border-color 0.3s ease,
+    background-color 0.3s ease;
+}
+.accent-chip:hover {
+  border-color: rgba(var(--wp-accent-rgb), 0.35);
+}
+.accent-chip-active {
+  box-shadow:
+    inset 0 0 0 1px rgba(var(--wp-accent-rgb), 0.45),
+    0 0 16px -6px rgba(var(--wp-accent-rgb), 0.55);
+}
+
+/* ---------------------------------------------------------------------------
+   全站中性色轻染
+   Tailwind 里大量 white/5、white/10 的边框、卡片底和悬停层，统一混入壁纸
+   主题色。透明度保持很低，只增加氛围，不改变正文与背景的对比度。
+--------------------------------------------------------------------------- */
+.border-white\/5 {
+  border-color: rgba(var(--wp-accent-rgb), 0.07);
+}
+.border-white\/10 {
+  border-color: rgba(var(--wp-accent-rgb), 0.14);
+}
+.border-white\/15 {
+  border-color: rgba(var(--wp-accent-rgb), 0.2);
+}
+.border-white\/20 {
+  border-color: rgba(var(--wp-accent-rgb), 0.26);
+}
+.border-white\/25 {
+  border-color: rgba(var(--wp-accent-rgb), 0.32);
+}
+
+.bg-white\/5 {
+  background-color: rgba(var(--wp-accent-rgb), 0.05);
+}
+.bg-white\/10 {
+  background-color: rgba(var(--wp-accent-rgb), 0.09);
+}
+.bg-white\/15 {
+  background-color: rgba(var(--wp-accent-rgb), 0.13);
+}
+
+/* 变体工具类的优先级比基础类高，这里用重复伪类提高特异性，
+   保证悬停/按下状态也能用上壁纸主题色（不需要 !important）。 */
+.hover\:bg-white\/5:hover:hover {
+  background-color: rgba(var(--wp-accent-rgb), 0.07);
+}
+.hover\:bg-white\/10:hover:hover {
+  background-color: rgba(var(--wp-accent-rgb), 0.12);
+}
+.active\:bg-white\/10:active:active {
+  background-color: rgba(var(--wp-accent-rgb), 0.12);
+}
+.active\:bg-white\/15:active:active {
+  background-color: rgba(var(--wp-accent-rgb), 0.17);
+}
+.hover\:border-white\/20:hover:hover {
+  border-color: rgba(var(--wp-accent-rgb), 0.28);
+}
+.hover\:border-white\/25:hover:hover {
+  border-color: rgba(var(--wp-accent-rgb), 0.34);
+}
+.focus-visible\:ring-white\/20:focus-visible:focus-visible {
+  --tw-ring-color: rgba(var(--wp-accent-rgb), 0.32);
+}
+.ring-white\/80 {
+  --tw-ring-color: rgba(var(--wp-accent-rgb), 0.85);
+}
+
+/* 输入框聚焦时加一层很细的主题色外圈，不改各模块自己的边框色 */
+input:focus,
+select:focus,
+textarea:focus {
+  box-shadow: 0 0 0 1px rgba(var(--wp-accent-rgb), 0.45);
+}
+
+button:focus-visible,
+a:focus-visible {
+  outline: 1px solid rgba(var(--wp-accent-rgb), 0.6);
+  outline-offset: 2px;
+}
+
+/* 主色小部件：选中日期、主操作按钮等 */
+.accent-cell {
+  background-color: var(--wp-accent);
+  color: var(--wp-on-accent);
+  box-shadow: 0 6px 18px -10px rgba(var(--wp-accent-rgb), 0.8);
+  transition:
+    background-color 0.5s ease,
+    color 0.5s ease;
+}
+.accent-hover-border:hover {
+  border-color: rgba(var(--wp-accent-rgb), 0.55);
+}
+.accent-text {
+  color: var(--wp-accent);
+}
+.accent-hover-text:hover {
+  color: var(--wp-accent);
+}
+.accent-border {
+  border-color: rgba(var(--wp-accent-rgb), 0.4);
+}
+.accent-badge {
+  background-color: rgba(var(--wp-accent-rgb), 0.14);
+  color: var(--wp-accent);
+  border-color: rgba(var(--wp-accent-rgb), 0.3);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .loading-screen > div:last-child,
+  .loading-ring,
+  .loading-core,
+  .loading-bar,
+  .loading-dots span {
+    animation: none;
+  }
+  .loading-fade-leave-active {
+    transition: opacity 0.15s ease;
+  }
 }

@@ -7,7 +7,7 @@ const { toasts, dismiss } = useToast()
 const STYLES = {
   success: { icon: 'checkCircle', ring: 'border-emerald-400/40', color: 'text-emerald-400' },
   error: { icon: 'alert', ring: 'border-rose-400/40', color: 'text-rose-400' },
-  info: { icon: 'info', ring: 'border-sky-400/40', color: 'text-sky-400' },
+  info: { icon: 'info', ring: 'accent-border', color: 'accent-text' },
 }
 </script>
 

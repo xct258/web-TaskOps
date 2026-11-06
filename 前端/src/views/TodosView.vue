@@ -197,10 +197,10 @@ function dueStatus(todo) {
   return { label: `${d} 天后 · ${formatDate(todo.due_time)}`, cls: 'text-slate-400' }
 }
 
-async function load() {
+async function load(force = false) {
   loading.value = true
   try {
-    items.value = await api.todos.list()
+    items.value = await api.todos.list({ force })
   } catch (err) {
     toast.error(`待办加载失败：${err.message}`)
   } finally {
@@ -490,7 +490,7 @@ function onSearchKeydown(e) {
 onMounted(() => {
   pageMenu.setMenu([
     { key: 'new', label: '新建待办', action: openAdd },
-    { key: 'refresh', label: '刷新', action: load },
+    { key: 'refresh', label: '刷新', action: () => load(true) },
   ], '待办')
   load()
   window.addEventListener('keydown', onSearchKeydown)

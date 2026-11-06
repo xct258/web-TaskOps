@@ -89,10 +89,10 @@ const availableFunds = computed(() => {
 const paymentTotal = computed(() => Math.round(Number(form.amount || 0) * 100) + (form.record_type === 'debt_out' ? Math.round(Number(form.interest || 0) * 100) : 0))
 const insufficientFunds = computed(() => !purchaseMode.value && ['expense', 'debt_out'].includes(form.record_type) && paymentTotal.value > availableFunds.value)
 
-async function refreshLoans() {
+async function refreshLoans(force = false) {
   loansLoading.value = true
   loansError.value = false
-  try { loans.value = await api.ledger.loans() }
+  try { loans.value = await api.ledger.loans({ force }) }
   catch (err) { loansError.value = true; toast.error(`借款项目加载失败：${err.message}`) }
   finally { loansLoading.value = false }
 }
@@ -106,10 +106,16 @@ const visible = computed(() => {
   })
 })
 
-async function load() {
+async function load(force = false) {
   loading.value = true
   try {
-    const [list, a, l, stats, loanList] = await Promise.all([api.ledger.list(), api.ledger.getAsset(), api.ledger.getLiability(), api.ledger.summary(), api.ledger.loans()])
+    const [list, a, l, stats, loanList] = await Promise.all([
+      api.ledger.list(0, { force }),
+      api.ledger.getAsset({ force }),
+      api.ledger.getLiability({ force }),
+      api.ledger.summary({ force }),
+      api.ledger.loans({ force }),
+    ])
     items.value = list
     hasMore.value = list.length === 200
     monthStats.value = stats
@@ -126,7 +132,7 @@ async function load() {
 async function loadMore() {
   loadingMore.value = true
   try {
-    const list = await api.ledger.list(items.value.length)
+    const list = await api.ledger.list(items.value.length, { force: true })
     items.value.push(...list)
     hasMore.value = list.length === 200
   } catch (err) { toast.error(`加载失败：${err.message}`) }
@@ -217,7 +223,7 @@ async function save() {
       toast.success('流水已记录')
     }
     modalOpen.value = false
-    await load()
+    await load(true)
     loadSummary()
   } catch (err) {
     toast.error(`保存失败：${err.message}`)
@@ -277,7 +283,7 @@ async function doDelete() {
   try {
     await api.ledger.remove(pendingDelete.value.id)
     toast.success(pendingDelete.value.purchase_id ? '购买及关联借入、支出已删除' : '流水已删除，资产已回冲')
-    await load()
+    await load(true)
     loadSummary()
   } catch (err) {
     toast.error(`删除失败：${err.message}`)
@@ -319,7 +325,7 @@ function onSearchKeydown(e) {
 onMounted(() => {
   pageMenu.setMenu([
     { key: 'new', label: '记一笔', action: openAdd },
-    { key: 'refresh', label: '刷新', action: load },
+    { key: 'refresh', label: '刷新', action: () => load(true) },
   ], '账本')
   load()
   window.addEventListener('keydown', onSearchKeydown)

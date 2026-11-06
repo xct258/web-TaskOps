@@ -101,7 +101,7 @@ watch(
       <div class="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] font-mono text-slate-400">
         <span
           v-if="cycleLabel(todo)"
-          class="px-1.5 py-px rounded-md border bg-indigo-500/15 text-indigo-300 border-indigo-400/30"
+          class="accent-badge px-1.5 py-px rounded-md border"
         >
           {{ cycleLabel(todo) }}
         </span>

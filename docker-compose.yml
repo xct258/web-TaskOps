@@ -18,6 +18,8 @@ services:
       - APP_SESSION_DAYS=${APP_SESSION_DAYS:-7}
       - PUSH_SERVER_URL=${PUSH_SERVER_URL:-https://push-server.o1-1.xct258.top}
       - PUSH_SERVER_TOKEN=${PUSH_SERVER_TOKEN:-}
+      # 壁纸图片接口地址（支持 {seed}/{width}/{height} 占位符）
+      - WALLPAPER_API_URL=${WALLPAPER_API_URL:-https://random-image.xct258.top/}
       # 页面 + API 统一端口（不再单独监听 8481）
       - FRONTEND_PORT=${FRONTEND_PORT:-8281}
       # 模板日志与服务摘要
