@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import Icon from '@/components/Icon.vue'
+import { useKeyboardViewport } from '@/composables/useKeyboardViewport'
 
 const props = defineProps({
   modelValue: { type: String, default: '' },
@@ -11,6 +12,8 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 
 const open = ref(false)
+// 移动端键盘：锁住页面滚动，只增加容器底部留白让卡片上移；遮罩保持铺满全屏。
+const { keyboardInset } = useKeyboardViewport(() => open.value)
 const viewYear = ref(0)
 const viewMonth = ref(0)
 const mode = ref('day') // day=选日；ym=年月的快捷选择
@@ -124,8 +127,8 @@ onUnmounted(() => {
       enter-from-class="opacity-0 -translate-y-1"
       leave-to-class="opacity-0 -translate-y-1"
     >
-      <div v-if="open" class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm" @click.self="open = false">
-      <section data-date-picker-dialog role="dialog" aria-modal="true" aria-label="选择日期" class="w-full max-w-sm max-h-[90dvh] overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-4 shadow-2xl shadow-slate-950/50">
+      <div v-if="open" class="fixed inset-0 z-[70] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm transition-[padding-bottom] duration-150 ease-out" :style="{ paddingBottom: keyboardInset ? `${keyboardInset + 24}px` : undefined }" @click.self="open = false">
+      <section data-date-picker-dialog role="dialog" aria-modal="true" aria-label="选择日期" class="w-full max-w-sm max-h-[90%] overflow-y-auto overscroll-contain scroll-smooth rounded-2xl border border-white/15 bg-slate-900 p-4 shadow-2xl shadow-slate-950/50">
         <div class="flex items-center justify-between gap-2 mb-3">
           <template v-if="mode === 'day'">
             <button type="button" class="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-white/10 transition" aria-label="上个月" @click="shiftMonth(-1)">‹</button>

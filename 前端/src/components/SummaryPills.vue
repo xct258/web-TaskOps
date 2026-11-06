@@ -12,10 +12,16 @@ const props = defineProps({
 })
 
 const monitorText = computed(() => {
-  if (summary.monitorErrors) return `${summary.monitorErrors}${props.compact ? '' : ' 台'}异常`
-  if (summary.monitorWarns) return `${summary.monitorWarns}${props.compact ? '' : ' 台'}告警`
+  if (summary.monitorErrors) return props.compact ? '异常' : `${summary.monitorErrors} 台异常`
+  if (summary.monitorWarns) return props.compact ? '告警' : `${summary.monitorWarns} 台告警`
   if (summary.monitorTotal) return `${summary.monitorNormal}/${summary.monitorTotal}${props.compact ? '' : ' '}正常`
   return props.compact ? '无上报' : '暂无上报'
+})
+
+const todoText = computed(() => {
+  if (!props.compact) return `${summary.todoTotal}/${summary.todoOverdue} 待办`
+  if (summary.todoOverdue > 0) return '逾期'
+  return summary.todoTotal > 0 ? '待办' : '无待办'
 })
 
 const chipBase = 'accent-chip flex shrink-0 items-center whitespace-nowrap rounded-lg transition'
@@ -74,7 +80,7 @@ const chipSkin = computed(() =>
     >
       <span v-if="summary.todoOverdue > 0" class="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
       <span v-else :style="{ color: 'var(--wp-accent)' }">✓</span>
-      <span>{{ summary.todoTotal }}/{{ summary.todoOverdue }}{{ compact ? '' : ' ' }}待办</span>
+      <span>{{ todoText }}</span>
     </button>
   </div>
 </template>

@@ -2,12 +2,15 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 
 import DatePicker from '@/components/DatePicker.vue'
+import { useKeyboardViewport } from '@/composables/useKeyboardViewport'
 import { beijingTodayYMD, formatPush, joinPushInput, parsePushInput, pushRelative, shiftYMD } from '@/utils/pushTime'
 
 const props = defineProps({ modelValue: { type: String, default: '' } })
 const emit = defineEmits(['update:modelValue'])
 
 const open = ref(false)
+// 移动端键盘：锁住页面滚动，只增加容器底部留白让卡片上移；遮罩保持铺满全屏。
+const { keyboardInset } = useKeyboardViewport(() => open.value)
 const draftDate = ref('')
 const draftHour = ref('')
 const draftMinute = ref('')
@@ -85,8 +88,8 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown, true))
 
     <Teleport to="body">
     <Transition enter-active-class="transition duration-150" leave-active-class="transition duration-100" enter-from-class="opacity-0" leave-to-class="opacity-0">
-      <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm" @click.self="open = false">
-      <section role="dialog" aria-modal="true" aria-label="选择推送时间" class="w-full max-w-sm max-h-[90dvh] overflow-y-auto rounded-2xl border border-white/15 bg-slate-900 p-4 shadow-2xl shadow-slate-950/50">
+      <div v-if="open" class="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm transition-[padding-bottom] duration-150 ease-out" :style="{ paddingBottom: keyboardInset ? `${keyboardInset + 24}px` : undefined }" @click.self="open = false">
+      <section role="dialog" aria-modal="true" aria-label="选择推送时间" class="w-full max-w-sm max-h-[90%] overflow-y-auto overscroll-contain scroll-smooth rounded-2xl border border-white/15 bg-slate-900 p-4 shadow-2xl shadow-slate-950/50">
         <h3 class="text-sm font-semibold text-white mb-4">选择推送时间 <span class="text-xs font-normal text-slate-500">北京时间</span></h3>
         <div class="text-[10px] text-slate-500 mb-1.5">日期</div>
         <DatePicker v-model="draftDate" placeholder="选择日期" />

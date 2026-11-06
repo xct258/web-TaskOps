@@ -2,6 +2,7 @@
 import { onUnmounted, watch } from 'vue'
 
 import Icon from '@/components/Icon.vue'
+import { useKeyboardViewport } from '@/composables/useKeyboardViewport'
 
 const props = defineProps({
   modelValue: { type: Boolean, default: false },
@@ -12,6 +13,10 @@ const props = defineProps({
   zIndex: { type: Number, default: 50 },
 })
 const emit = defineEmits(['update:modelValue'])
+
+// 移动端键盘：锁住页面滚动，只给弹窗容器增加底部留白让卡片上移；
+// 背景遮罩保持铺满全屏，不跟着可视区域位移。
+const { keyboardInset } = useKeyboardViewport(() => props.modelValue)
 
 // 多个弹窗叠加时，Esc 只关闭最上层，避免选择弹窗把下面的详情弹窗一起关掉。
 const openModals = []
@@ -56,12 +61,15 @@ onUnmounted(removeKeydown)
     >
       <div
         v-if="modelValue"
-        class="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md"
-        :style="{ zIndex }"
+        class="fixed inset-0 flex items-center justify-center p-3 sm:p-4 bg-slate-950/80 backdrop-blur-md transition-[padding-bottom] duration-150 ease-out"
+        :style="{
+          zIndex,
+          paddingBottom: keyboardInset ? `${keyboardInset + 24}px` : undefined,
+        }"
         @click.self="closeOnBackdrop && close()"
       >
         <div
-          :class="['w-full bg-slate-900 border border-white/15 rounded-2xl shadow-2xl flex flex-col max-h-[88vh] animate-scale-in', maxWidth]"
+          :class="['w-full min-h-0 bg-slate-900 border border-white/15 rounded-2xl shadow-2xl flex flex-col max-h-full animate-scale-in', maxWidth]"
         >
           <div class="flex items-center justify-between gap-3 px-5 py-3.5 border-b border-white/10 shrink-0">
             <div class="flex min-w-0 flex-1 items-center gap-2">
@@ -78,7 +86,7 @@ onUnmounted(removeKeydown)
             </button>
           </div>
 
-          <div class="px-5 py-4 overflow-y-auto custom-scroll flex-1">
+          <div class="px-5 py-4 min-h-0 overflow-y-auto custom-scroll scroll-smooth flex-1 overscroll-contain">
             <slot />
           </div>
 
