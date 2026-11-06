@@ -407,7 +407,7 @@ onUnmounted(() => window.removeEventListener('keydown', onSearchKeydown))
           </template>
           <input
             v-model="tagInput"
-            class="flex-1 min-w-[5rem] bg-transparent text-[11px] text-slate-300 caret-violet-400 placeholder-slate-600 focus:outline-none selectable"
+            class="no-focus-ring flex-1 min-w-[5rem] bg-transparent text-[11px] text-slate-300 caret-violet-400 placeholder-slate-600 focus:outline-none selectable"
             :placeholder="draftTagList.length ? '' : '输入标签后回车或点空白处'"
             @keydown="onTagKey"
             @blur="addTag"

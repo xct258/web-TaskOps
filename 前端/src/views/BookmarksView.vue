@@ -385,7 +385,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
                 <button type="button" class="hover:text-white" @click="removeTag(tag)">×</button>
               </span>
             </template>
-            <input v-model="tagInput" :class="'bg-transparent outline-none text-white text-xs placeholder-slate-500 w-20 flex-1 min-w-[3rem]'" :placeholder="parseTags(form.tags).length ? '' : '输入标签后回车或点空白处'" @keydown="onTagKey" @blur="addTag" />
+            <input v-model="tagInput" :class="'no-focus-ring bg-transparent outline-none text-white text-xs placeholder-slate-500 w-20 flex-1 min-w-[3rem]'" :placeholder="parseTags(form.tags).length ? '' : '输入标签后回车或点空白处'" @keydown="onTagKey" @blur="addTag" />
           </div>
         </div>
       </div>

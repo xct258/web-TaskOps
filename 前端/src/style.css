@@ -405,10 +405,11 @@ select option {
   --tw-ring-color: rgba(var(--wp-accent-rgb), 0.85);
 }
 
-/* 输入框聚焦时加一层很细的主题色外圈，不改各模块自己的边框色 */
-input:focus,
-select:focus,
-textarea:focus {
+/* 输入框聚焦时加一层很细的主题色外圈，不改各模块自己的边框色。
+   组合型输入框（如标签容器）由外层负责边框，内部 input 加 no-focus-ring 避免双层边框。 */
+input:focus:not(.no-focus-ring),
+select:focus:not(.no-focus-ring),
+textarea:focus:not(.no-focus-ring) {
   box-shadow: 0 0 0 1px rgba(var(--wp-accent-rgb), 0.45);
 }
 
