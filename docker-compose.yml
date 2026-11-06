@@ -1,14 +1,24 @@
 services:
   taskops:
     container_name: taskops
-    image: xct258/taskops
+    image: xct258/taskops:latest
     network_mode: host
+    restart: unless-stopped
     volumes:
+      # 应用代码 + SQLite 数据库持久化
       - ./app:/app
+      # 模板日志与一次性启动标记
+      - ./data:/data
     environment:
       - APP_PASSWORD=${APP_PASSWORD:-}
       - APP_SECRET=${APP_SECRET:-}
       - APP_SESSION_DAYS=${APP_SESSION_DAYS:-7}
       - PUSH_SERVER_URL=${PUSH_SERVER_URL:-https://push-server.o1-1.xct258.top}
       - PUSH_SERVER_TOKEN=${PUSH_SERVER_TOKEN:-}
-    restart: always
+      # 前端静态服务 / 后端 FastAPI 端口
+      - FRONTEND_PORT=${FRONTEND_PORT:-8281}
+      - BACKEND_PORT=${BACKEND_PORT:-8481}
+      # 模板日志与服务摘要
+      - LOG_BASE_DIR=/data/logs
+      - SERVICE_PORT=${FRONTEND_PORT:-8281}
+      - SERVICE_PASSWORD=${APP_PASSWORD:-}

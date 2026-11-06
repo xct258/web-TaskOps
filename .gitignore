@@ -4,6 +4,10 @@
 后端/routers/__pycache__/
 *.py[cod]
 
+# docker compose 运行时目录（模板日志 / 代码卷）
+app/
+data/
+
 # 本地起服务产生的日志与 pid（nohup 起的 uvicorn / vite dev）
 *.log
 *.pid

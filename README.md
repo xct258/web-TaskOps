@@ -56,32 +56,41 @@
 ├── models.py          # 数据表模型（Todo/Bookmark/Ledger/Asset/Liability/Note/MindMap）
 ├── utils.py           # 日期、循环周期、账本资金影响等纯函数
 └── routers/           # 各业务路由：todos / bookmarks / monitor / ledger / notes / mindmaps
-容器构建脚本/
-├── init-components.sh # 镜像构建期：装依赖（含 Node）+ 前端构建 + 拉取后端文件 + 安装 7zz
-└── start.sh           # 容器启动：复制文件到 /app、起 uvicorn 与静态服务器
-Dockerfile             # 基于 xct258/debian-cn 构建镜像
-docker-compose.yml     # 运行容器（host 网络 + 数据卷 ./app:/app）
+install/                # 构建期（docker-image-template）
+├── app.conf            # 镜像名 / 架构 / apt / pip 依赖
+├── install.sh          # 模板通用安装器
+└── custom-install.sh   # 下载 Node 构建前端，拷贝后端到 /opt/taskops
+startup/                # 运行期
+├── prepare.sh          # 每次启动：同步代码到 /app
+├── once.sh             # 只执行一次
+├── update.sh           # 自动更新（本仓库保持空操作）
+└── main.sh             # 启动 uvicorn + 静态服务器并常驻
+template/               # 模板固定的 Dockerfile 与 start.sh
+check.sh                # 本地自查（push 前运行）
+docker-compose.yml      # 运行容器（host 网络 + 数据卷）
 ```
 
 ---
 
-## 三、快速开始
+## 三、构建与部署（docker-image-template）
+
+本仓库使用 [xct258/docker-image-template](https://github.com/xct258/docker-image-template)：
+镜像只通过 GitHub Actions 构建，本地不需要安装 Docker。
 
 ### 1. 构建镜像
 
-```bash
-docker build -t xct258/taskops .
-```
+Actions 页面 → **Build and Push Docker Image** → **Run workflow**。工作流会：
 
-`Dockerfile` 会从 GitHub main 拉取 `容器构建脚本/init-components.sh` 并执行：安装
-`python3 / pip(uvicorn fastapi sqlmodel) / Node.js / 7zz`，前端源码构建为 `dist`，
-连同后端一起下载到 `/opt/taskops`。
+1. 运行 `bash check.sh` 做静态校验；
+2. 按 `install/app.conf` 读取镜像名、标签和架构；
+3. 用 `template/Dockerfile` 构建并推送 `xct258/taskops:latest`（每月 1 日也会自动构建）。
 
-> 构建依赖 GitHub main 上的文件已是最新；若刚改过代码，请先推送再构建。
+需要在仓库 Secrets 中配置 `DOCKERACC` / `DOCKERPWD`。
 
-### 2. 启动
+### 2. 启动 / 更新
 
 ```bash
+docker compose pull
 docker compose up -d
 ```
 
@@ -91,11 +100,12 @@ docker compose up -d
 services:
   taskops:
     container_name: taskops
-    image: xct258/taskops
+    image: xct258/taskops:latest
     network_mode: host        # 直接占用宿主机 8281 / 8481
     volumes:
       - ./app:/app            # 代码 + 数据库持久化
-    restart: always
+      - ./data:/data          # 模板日志与一次性启动标记
+    restart: unless-stopped
 ```
 
 ### 3. 访问
@@ -108,14 +118,18 @@ services:
 
 ## 四、容器启动流程
 
-`docker compose up` 后执行 `ENTRYPOINT` 即 `/usr/local/bin/start.sh`：
+`docker compose up` 后执行 `ENTRYPOINT` 即 `/opt/start.sh`，按模板顺序运行：
 
-1. 建目录 `/app/前端`、`/app/后端`、`/app/后端/routers`。
-2. 铺代码到挂载卷：前端是构建产物（哈希文件名），`rm -rf` 后重铺以保证版本一致；
-   后端用 `cp -rn`（已存在不覆盖），保住 `data/` 与用户改动。
-3. `chmod -R a+rX /app/前端`。
-4. 后台启动后端：`uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8481`。
-5. 前台启动前端静态服务器：`python3 -m http.server 8281 --directory /app/前端`（它是容器主进程，退出即容器停止）。
+1. `startup/prepare.sh`（每次启动）：建目录；前端从 `/opt/taskops/前端` 清空重铺到 `/app/前端`；
+   后端用 `cp -rn` 从 `/opt/taskops/后端` 补到 `/app/后端`（保住 `data/` 与用户改动）；`chmod -R a+rX /app/前端`。
+2. `startup/update.sh`：本仓库为空操作，版本跟随镜像。
+3. `startup/once.sh`：只执行一次，确保 `/app/后端/data` 存在。
+4. `startup/main.sh`：后台启动后端 `uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8481`，
+   启动前端静态服务器 `python3 -m http.server 8281 --directory /app/前端`。
+   任一进程退出，容器结束并由 `restart` 策略拉起；`docker stop` 时两个进程一起停止。
+
+服务日志写在容器内 `/data/logs/service/service.log`（宿主机 `./data/logs/...`），
+启动脚本日志在 `/data/logs/<脚本名>/...`。
 
 ---
 
@@ -168,8 +182,9 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 ## 六、数据持久化与升级
 
 - 各业务域 SQLite 文件位于容器内 `/app/后端/data/`，通过 `./app:/app` 持久化到宿主机。
-- `start.sh` 复制代码：前端清空重铺（构建产物随镜像版本走），后端 `cp -rn` **不覆盖已存在文件**：
+- `startup/prepare.sh` 复制代码：前端清空重铺（构建产物随镜像版本走），后端 `cp -rn` **不覆盖已存在文件**：
   升级镜像不会清空数据，但卷里后端旧代码也不会被自动覆盖（前端不受此限制）。
+- 模板日志和一次性启动标记在容器内 `/data`，通过 `./data:/data` 持久化到宿主机。
 - 改了表结构：删对应 `.db` 后重启，`lifespan` 会按新模型重建（会丢数据，先备份）。
 - 书签图标由后端抓取后缓存在 `/app/后端/data/favicons/`，通过 `/api/favicons/<文件名>` 只读暴露；
   新建书签时试抓一次，抓不到就让前端显示首字母；只有右键「更新图标」才会重新抓取。
