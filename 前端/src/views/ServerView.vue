@@ -1142,7 +1142,7 @@ onUnmounted(() => {
           </p>
           <p>
             <span class="text-slate-200 font-mono">mode</span>：<code>append</code> 保留多条记录；
-            <code>overwrite</code> 当 <code>server_name</code>、<code>topic</code>、<code>title</code> 都一致时只留最新一条
+            <code>overwrite</code> 当 <code>server_name</code>、<code>category</code>、<code>topic</code>、<code>title</code> 都一致时只留最新一条
           </p>
           <p>
             <span class="text-slate-200 font-mono">push_to_mqtt</span>：是否同时推到 MQTT，传
