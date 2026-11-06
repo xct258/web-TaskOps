@@ -316,6 +316,9 @@ select option {
 .accent-focus:focus {
   border-color: var(--wp-accent);
 }
+.accent-focus-within:focus-within {
+  border-color: var(--wp-accent);
+}
 .accent-button {
   background-color: var(--wp-accent);
   color: var(--wp-on-accent);
@@ -405,12 +408,13 @@ select option {
   --tw-ring-color: rgba(var(--wp-accent-rgb), 0.85);
 }
 
-/* 输入框聚焦时加一层很细的主题色外圈，不改各模块自己的边框色。
+/* 输入框聚焦：边框和细外圈都使用壁纸主题色。
    组合型输入框（如标签容器）由外层负责边框，内部 input 加 no-focus-ring 避免双层边框。 */
 input:focus:not(.no-focus-ring),
 select:focus:not(.no-focus-ring),
 textarea:focus:not(.no-focus-ring) {
-  box-shadow: 0 0 0 1px rgba(var(--wp-accent-rgb), 0.45);
+  border-color: var(--wp-accent);
+  box-shadow: 0 0 0 1px rgba(var(--wp-accent-rgb), 0.4);
 }
 
 button:focus-visible,

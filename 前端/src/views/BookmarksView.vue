@@ -378,7 +378,7 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         </div>
         <div>
           <label class="block text-slate-400 mb-1">标签</label>
-          <div class="flex flex-wrap gap-1.5 items-center bg-slate-950 border border-white/10 rounded-xl px-2 py-1.5 focus-within:border-indigo-400 transition">
+          <div class="accent-focus-within flex flex-wrap gap-1.5 items-center bg-slate-950 border border-white/10 rounded-xl px-2 py-1.5 transition">
             <template v-for="tag in parseTags(form.tags)" :key="tag">
               <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-indigo-500/20 text-indigo-200 text-[10px] font-medium border border-indigo-400/30">
                 {{ tag }}

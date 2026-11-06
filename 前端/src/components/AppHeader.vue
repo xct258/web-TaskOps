@@ -1,6 +1,6 @@
 <script setup>
 import { onMounted, onUnmounted, ref } from 'vue'
-import { useRoute, useRouter } from 'vue-router'
+import { useRoute } from 'vue-router'
 
 import Icon from '@/components/Icon.vue'
 import SummaryPills from '@/components/SummaryPills.vue'
@@ -8,11 +8,8 @@ import { loadSummary } from '@/composables/useSummary'
 import { useWeather } from '@/composables/useWeather'
 import { NAV_ITEMS } from '@/router'
 
-const router = useRouter()
 const route = useRoute()
 const { icon, temp, desc, city } = useWeather()
-
-// 导航菜单按钮：所有模块收进下拉面板，省顶栏空间。
 const menuOpen = ref(false)
 const menuWrap = ref(null)
 function toggleMenu() {
@@ -48,10 +45,6 @@ onUnmounted(() => {
   document.removeEventListener('click', onMenuOutside)
   document.removeEventListener('keydown', onMenuKey)
 })
-
-function go(path) {
-  router.push(path)
-}
 </script>
 
 <template>
@@ -59,45 +52,32 @@ function go(path) {
     class="flex-shrink-0 flex items-center justify-between gap-2 sm:gap-3 pb-2.5 border-b transition-colors duration-500"
     :style="{ borderBottomColor: 'rgba(var(--wp-accent-rgb), 0.22)' }"
   >
-    <!-- Logo + 汇总状态胶囊 -->
-    <div class="flex items-center gap-2.5 sm:gap-4 overflow-hidden flex-shrink-0">
-      <!-- 极简排印 Logo：宽字距等宽大写 + 末尾小色块，无装饰图形 -->
-      <button
-        class="flex items-center gap-1.5 transition-opacity hover:opacity-70"
-        title="返回书签首页"
-        @click="go('/bookmarks')"
-      >
-        <h1 class="text-base sm:text-lg font-mono font-bold tracking-[0.3em] text-white leading-none">
-          主页
-        </h1>
-        <span class="accent-dot h-1.5 w-1.5 rounded-[2px]" />
-      </button>
-
-      <div class="hidden sm:flex items-center gap-1.5 font-mono text-[11px]">
-        <SummaryPills />
+    <!-- 天气：最左侧 -->
+    <div
+      class="flex shrink-0 items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/60 border border-white/10 text-xs"
+    >
+      <span class="text-sm sm:text-base leading-none">{{ icon }}</span>
+      <div class="flex flex-col text-left leading-none">
+        <div class="flex items-center gap-1">
+          <span class="text-xs font-bold text-white">{{ temp }}</span>
+          <span class="text-[10px] text-slate-300 hidden xs:inline">{{ desc }}</span>
+        </div>
+        <span class="text-[9px] text-slate-400 truncate max-w-[68px] mt-0.5">{{ city }}</span>
       </div>
     </div>
 
-    <!-- 移动端：压缩成一行文字，跟在 Logo 后面，不额外占高度 -->
-    <SummaryPills compact class="sm:hidden flex-1" />
-
-    <!-- 天气 -->
-    <div class="flex items-center gap-2 sm:gap-3.5 font-mono flex-shrink-0">
-      <div
-        class="flex items-center gap-1.5 px-2.5 py-1 rounded-xl bg-slate-900/60 border border-white/10 text-xs"
-      >
-        <span class="text-sm sm:text-base leading-none">{{ icon }}</span>
-        <div class="flex flex-col text-left leading-none">
-          <div class="flex items-center gap-1">
-            <span class="text-xs font-bold text-white">{{ temp }}</span>
-            <span class="text-[10px] text-slate-300 hidden xs:inline">{{ desc }}</span>
-          </div>
-          <span class="text-[9px] text-slate-400 truncate max-w-[68px] mt-0.5">{{ city }}</span>
-        </div>
+    <!-- 右侧：汇总状态 + 导航菜单 -->
+    <div class="flex min-w-0 flex-1 items-center justify-end gap-2 sm:gap-3.5">
+      <!-- 桌面端汇总状态胶囊 -->
+      <div class="hidden sm:flex min-w-0 items-center gap-1.5 font-mono text-[11px] overflow-hidden">
+        <SummaryPills />
       </div>
 
+      <!-- 移动端：压缩成一行文字，不额外占高度 -->
+      <SummaryPills compact class="sm:hidden min-w-0" />
+
       <!-- 导航菜单：所有模块收进下拉面板 -->
-      <div ref="menuWrap" class="relative">
+      <div ref="menuWrap" class="relative flex-shrink-0">
         <button
           class="p-1.5 rounded-xl bg-slate-900/60 hover:bg-white/10 border border-white/10 text-slate-300 hover:text-white transition"
           title="导航菜单"

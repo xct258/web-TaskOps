@@ -1,5 +1,7 @@
 import { onMounted, ref } from 'vue'
 
+import { trackRequest } from '@/composables/useNet'
+
 /** WMO 天气代码 -> 图标 + 中文描述（与模板保持一致）。 */
 export function decodeWMO(code) {
   if (code === 0) return { icon: '☀️', text: '晴朗' }
@@ -27,8 +29,11 @@ export function useWeather() {
     loading.value = true
     city.value = label
     try {
-      const res = await fetch(
-        `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`,
+      // 计入首屏 pending：天气请求也在加载页期间完成，避免进页面后温度再跳出来。
+      const res = await trackRequest(
+        fetch(
+          `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current_weather=true`,
+        ),
       )
       if (!res.ok) throw new Error('weather api failed')
       const data = await res.json()

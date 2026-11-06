@@ -45,25 +45,6 @@ const chipSkin = computed(() =>
 
     <span v-if="compact" class="shrink-0" :style="{ color: 'rgba(var(--wp-accent-rgb), 0.45)' }">·</span>
 
-    <!-- 服务信息 -->
-    <button :class="[chipBase, chipSkin]" title="前往服务信息" @click="router.push('/server')">
-      <span
-        class="h-1.5 w-1.5 rounded-full"
-        :class="
-          summary.monitorErrors
-            ? 'bg-rose-400 animate-pulse'
-            : summary.monitorWarns
-              ? 'bg-amber-400'
-              : summary.monitorTotal
-                ? 'bg-emerald-400'
-                : 'bg-slate-500'
-        "
-      />
-      <span>{{ monitorText }}</span>
-    </button>
-
-    <span v-if="compact" class="shrink-0" :style="{ color: 'rgba(var(--wp-accent-rgb), 0.45)' }">·</span>
-
     <!-- 待办：有逾期时红色提醒 -->
     <button
       :class="[
@@ -81,6 +62,25 @@ const chipSkin = computed(() =>
       <span v-if="summary.todoOverdue > 0" class="h-1.5 w-1.5 rounded-full bg-rose-400 animate-pulse" />
       <span v-else :style="{ color: 'var(--wp-accent)' }">✓</span>
       <span>{{ todoText }}</span>
+    </button>
+
+    <span v-if="compact" class="shrink-0" :style="{ color: 'rgba(var(--wp-accent-rgb), 0.45)' }">·</span>
+
+    <!-- 服务信息 / 告警：放在最右侧 -->
+    <button :class="[chipBase, chipSkin]" title="前往服务信息" @click="router.push('/server')">
+      <span
+        class="h-1.5 w-1.5 rounded-full"
+        :class="
+          summary.monitorErrors
+            ? 'bg-rose-400 animate-pulse'
+            : summary.monitorWarns
+              ? 'bg-amber-400'
+              : summary.monitorTotal
+                ? 'bg-emerald-400'
+                : 'bg-slate-500'
+        "
+      />
+      <span>{{ monitorText }}</span>
     </button>
   </div>
 </template>
