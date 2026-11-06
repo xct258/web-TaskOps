@@ -18,10 +18,12 @@
     $ python main.py
 """
 from contextlib import asynccontextmanager
+import os
+from pathlib import Path
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import HTMLResponse
+from fastapi.responses import FileResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 
 from db import FAVICON_DIR, init_db
@@ -71,6 +73,50 @@ app.include_router(inventory.router, prefix="/api")
 # 书签图标缓存：后端抓取后落盘到 data/favicons/，前端只读这里，不再直连第三方。
 # 路径带 /api 前缀，开发走 vite 代理、生产与前端同源时都能直接命中。
 app.mount("/api/favicons", StaticFiles(directory=FAVICON_DIR), name="favicons")
+
+# ---------------------------------------------------------------------------
+# 前端构建产物：和 push-server 一样由 FastAPI 直接托管，单端口 8281 同时提供
+# 页面和 /api，NPM 只需把域名整体转发到 8281。
+#   容器：/app/前端（prepare.sh 从镜像铺过来）
+#   本地：前端/dist（npm run build 的产物）
+# ---------------------------------------------------------------------------
+BASE_DIR = Path(__file__).resolve().parent
+FRONTEND_DIST = None
+for _candidate in (
+    os.environ.get("FRONTEND_DIR"),
+    BASE_DIR.parent / "前端" / "dist",
+    Path("/app/前端"),
+):
+    if not _candidate:
+        continue
+    _candidate = Path(_candidate)
+    if (_candidate / "index.html").is_file() and (_candidate / "assets").is_dir():
+        FRONTEND_DIST = _candidate.resolve()
+        break
+
+if FRONTEND_DIST:
+    app.mount(
+        "/assets",
+        StaticFiles(directory=FRONTEND_DIST / "assets"),
+        name="frontend-assets",
+    )
+
+    @app.get("/", include_in_schema=False)
+    async def frontend_index():
+        return FileResponse(FRONTEND_DIST / "index.html")
+
+    _favicon = FRONTEND_DIST / "favicon.svg"
+    if _favicon.is_file():
+
+        @app.get("/favicon.svg", include_in_schema=False)
+        async def frontend_favicon():
+            return FileResponse(_favicon)
+
+else:
+
+    @app.get("/", include_in_schema=False)
+    async def frontend_missing():
+        return HTMLResponse("前端尚未构建：请先在 前端/ 执行 npm run build", status_code=503)
 
 
 @app.get("/docs", include_in_schema=False)

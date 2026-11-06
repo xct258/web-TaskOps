@@ -4,10 +4,9 @@ services:
     image: xct258/taskops:latest
     network_mode: host
     restart: unless-stopped
-    # 多进程容器用 tini 回收孤儿进程
+    # 单进程 FastAPI：页面和 /api 都在 8281，用 tini 回收孤儿进程
     init: true
-    # 停止 api + web 的总时间大于默认 10s
-    stop_grace_period: 30s
+    stop_grace_period: 15s
     volumes:
       # 应用代码 + SQLite 数据库持久化
       - ./app:/app
@@ -19,9 +18,8 @@ services:
       - APP_SESSION_DAYS=${APP_SESSION_DAYS:-7}
       - PUSH_SERVER_URL=${PUSH_SERVER_URL:-https://push-server.o1-1.xct258.top}
       - PUSH_SERVER_TOKEN=${PUSH_SERVER_TOKEN:-}
-      # 前端静态服务 / 后端 FastAPI 端口
+      # 页面 + API 统一端口（不再单独监听 8481）
       - FRONTEND_PORT=${FRONTEND_PORT:-8281}
-      - BACKEND_PORT=${BACKEND_PORT:-8481}
       # 模板日志与服务摘要
       - LOG_BASE_DIR=/data/logs
       - SERVICE_PORT=${FRONTEND_PORT:-8281}

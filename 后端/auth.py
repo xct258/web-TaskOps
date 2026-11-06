@@ -29,6 +29,9 @@ PUBLIC_PATHS = {
     "/api/auth/login",
     "/api/auth/logout",
 }
+# 登录页和前端静态资源必须公开，否则未登录时连登录页都加载不出来。
+PUBLIC_STATIC_PATHS = {"/", "/index.html", "/favicon.svg", "/favicon.ico"}
+PUBLIC_STATIC_PREFIXES = ("/assets/",)
 SECRET = (
     os.environ.get("APP_SECRET")
     or hashlib.sha256(f"taskops-session|{PASSWORD}".encode("utf-8")).hexdigest()
@@ -101,13 +104,16 @@ def _client_ip(request: Request) -> str:
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """除登录相关接口外，所有请求都要求会话 Cookie。"""
+    """除登录接口和前端静态资源外，所有请求都要求会话 Cookie。"""
 
     async def dispatch(self, request, call_next):
+        path = request.url.path
         if (
             not auth_enabled()
             or request.method == "OPTIONS"
-            or request.url.path in PUBLIC_PATHS
+            or path in PUBLIC_PATHS
+            or path in PUBLIC_STATIC_PATHS
+            or path.startswith(PUBLIC_STATIC_PREFIXES)
         ):
             return await call_next(request)
         if is_authenticated(request):

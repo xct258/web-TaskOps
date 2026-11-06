@@ -9,13 +9,11 @@
 
 | 组件 | 技术 | 监听 | 对外 |
 | --- | --- | --- | --- |
-| 前端页面 | Vue 3 + Vite 构建产物 `dist`（Python `http.server` 托管） | `8281` | 经反代 |
-| 后端接口 | FastAPI + uvicorn（路由统一 `/api` 前缀） | `8481` | 经反代 |
+| 前端页面 + 接口 | FastAPI + uvicorn，直接托管 Vue 构建产物 `dist` | `8281` | 经反代 |
 
-- 前端默认同源请求 `/api/*`（未设置 `VITE_API_BASE` 时），与后端同域，**无跨域**。
-- 后端所有业务路由都挂在 `/api` 下（如 `/api/todos`）。
-- 生产由反向代理把 `/` 转到 `8281`、`/api/` 转到 `8481`，浏览器只访问一个域名，**无跨域**。
-- 直接访问（不走反代）时，`:8281` 没有 `/api`，前端调不到后端，需按第五节配置反代。
+- 和 push-server 一样，前端和 `/api/*` 跑在**同一个 FastAPI 进程、同一个端口 8281**，天然同源，**无跨域**。
+- 后端所有业务路由都挂在 `/api` 下（如 `/api/todos`）；NPM 只需要把整个域名转发到 `8281`，不需要单独配置 `/api`。
+- 直接访问 `http://<主机>:8281` 就能打开完整应用，`http://<主机>:8281/api/todos` 就是接口。
 
 ---
 
@@ -105,7 +103,7 @@ services:
   taskops:
     container_name: taskops
     image: xct258/taskops:latest
-    network_mode: host        # 直接占用宿主机 8281 / 8481
+    network_mode: host        # 直接占用宿主机 8281
     volumes:
       - ./app:/app            # 代码 + 数据库持久化
       - ./data:/data          # 模板日志与一次性启动标记
@@ -117,8 +115,8 @@ services:
 ### 3. 访问
 
 - 经反代：`https://taskops.你的域名.com`（推荐）
-- 直连后端自测：`http://<主机>:8481/api/todos`
-- 后端 API 文档（直连）：`http://<主机>:8481/docs`
+- 直连自测：`http://<主机>:8281/api/todos`
+- API 文档：`http://<主机>:8281/docs`
 
 ---
 
@@ -131,18 +129,19 @@ services:
 2. `startup/update.sh`：本仓库为空操作，版本跟随镜像。
 3. `startup/once.sh`：只执行一次，确保 `/app/后端/data` 存在。
 4. `startup/main.sh`：固定薄壳，加载 `template/supervisor.sh` 和 `startup/services.sh`。
-   `services.sh` 声明后端 `uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8481`
-   和前端静态服务器 `python3 -m http.server 8281 --directory /app/前端`。
-   任一进程退出，两个都停止，容器结束并由 `restart` 策略拉起；`docker stop` 时依次停止并等待超时。
+   `services.sh` 只声明一个服务：`uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8281`。
+   FastAPI 在同一个端口同时提供页面、静态资源、`/api/*` 和 `/docs`，与 push-server 的做法一致。
+   进程退出后容器结束，由 `restart` 策略拉起；`docker stop` 时等待超时后退出。
 
-服务日志按进程分别写在容器内 `/data/logs/service/<名称>.log`（如 `api.log`、`web.log`；
-宿主机 `./data/logs/service/...`），启动脚本日志在 `/data/logs/<脚本名>/...`。
+服务日志写在容器内 `/data/logs/service/api.log`（宿主机 `./data/logs/service/api.log`），
+启动脚本日志在 `/data/logs/<脚本名>/...`。
 
 ---
 
 ## 五、反向代理（Nginx Proxy Manager）
 
-因为前端走相对 `/api`，必须通过反代访问。以 NPM 为例：
+前端和 `/api` 都在 `8281` 上，NPM 只需要一个普通的 Proxy Host 转发到 `8281`，
+**不要再给 `/api` 单独建 Custom Location**。
 
 ### 网络前提
 
@@ -154,8 +153,6 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 ### Proxy Host 配置
 
-**前端 Proxy Host**
-
 | 项 | 值 |
 | --- | --- |
 | Domain Names | `taskops.你的域名.com` |
@@ -164,25 +161,16 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | Forward Port | `8281` |
 | SSL | 申请 Let's Encrypt，开启 Force SSL |
 
-**该 Proxy Host 下的 Custom Location（后端）**
+> 浏览器请求 `/api/todos` 时，NPM 原样转给 `8281/api/todos`，FastAPI 在同进程内处理。
+> 不需要 rewrite，也不要把 `/api` 指向别的端口。
 
-| 项 | 值 |
-| --- | --- |
-| Location | `/api` |
-| Scheme | `http` |
-| Forward Hostname / IP | 同上 |
-| Forward Port | `8481` |
+### 可选：API 文档
 
-> 后端本身就在 `/api` 前缀下，NPM 转发保留原路径且**无需 rewrite**：
-> `/api/todos` 会原样转发到 `8481/api/todos`。
-
-### 可选：把 API 文档也代理出去
-
-再加两个 Custom Location 到 `8481`：`/docs` 与 `/openapi.json`。
+`/docs` 和 `/openapi.json` 也在 8281 上，和页面同源，已经可以随域名一起访问，无需额外配置。
 
 ### 防火墙
 
-只对外放行 NPM 的 `80/443`；`8281`、`8481` 可只留内网。
+只对外放行 NPM 的 `80/443`；`8281` 只留给反代内网访问。
 
 ---
 
@@ -211,7 +199,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | 笔记 | `GET/POST /api/notes`、`PUT/DELETE /api/notes/{nid}` |
 | 思维导图 | `GET/POST /api/mindmaps`、`PUT/DELETE /api/mindmaps/{mid}` |
 
-> 在线调试：直连 `http://<主机>:8481/docs`（Scalar 文档，数据来自 `/openapi.json`）。
+> 在线调试：`http://<主机>:8281/docs`（Scalar 文档，数据来自 `/openapi.json`）。
 >
 > 服务信息的数据源是 push-server：服务器脚本 `POST /api/push` 上报，TaskOps 读取其 `GET /records` 并按 `server_name` 分组展示；卡片弹窗采用左右分栏：左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前范围的记录并分页，支持「全部项目」和「全部服务」；移动端把左侧栏收进服务器名称旁边的按钮，按钮显示当前项目/服务，点击后弹窗选择。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）。`/api/push` 的 `category`（服务消息固定传 `service`）、`title` 和 `status`（`ok` / `warn` / `error` / `info`）为必填；TaskOps 向 `/api/task` 投递待办时固定传 `category: "todo"`。后端通过 `PUSH_SERVER_URL` 配置地址（默认 `https://push-server.o1-1.xct258.top`），可用 `GET /api/monitor/health` 检查连通性。消息列表里每条报警的「消除报警」只作用于那条记录，不牵连同服务器的其他报警；原始记录仍保留，点「恢复」可以让它重新参与报警判断。
 
@@ -224,9 +212,13 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
   cd 后端
   uvicorn main:app --host 0.0.0.0 --port 8481
   ```
-- 前端：先构建再托管，例如 `cd 前端 && npm install && npm run build && python3 -m http.server 8281 --directory dist`。
-- 不经反代直连调试时，前端调不到 `/api`，开发模式可用 `npm run dev`（`/api` 自动反代到 `127.0.0.1:8481`），
-  或临时指定 `VITE_PROXY_TARGET=http://<主机>:8481 npm run dev`。
+- 前端（生产模式本地验证）：先 `cd 前端 && npm run build`，再让后端托管构建产物：
+  ```bash
+  cd 后端
+  FRONTEND_DIR=../前端/dist uvicorn main:app --host 0.0.0.0 --port 8281
+  ```
+  访问 `http://127.0.0.1:8281`，页面和 `/api` 都在 8281。
+- 日常开发仍用 `npm run dev`（Vite 自己反代 `/api` 到 `127.0.0.1:8481`）。
 
 ---
 
