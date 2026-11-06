@@ -213,7 +213,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 > 在线调试：直连 `http://<主机>:8481/docs`（Scalar 文档，数据来自 `/openapi.json`）。
 >
-> 服务信息的数据源是 push-server：服务器脚本 `POST /api/push` 上报，TaskOps 读取其 `GET /records` 并按 `server_name` 分组展示；卡片弹窗采用左右分栏：左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前范围的记录并分页，支持「全部项目」和「全部服务」；移动端把左侧栏收进服务器名称旁边的按钮，按钮显示当前项目/服务，点击后弹窗选择。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）。`/api/push` 的 `title` 和 `status`（`ok` / `warn` / `error` / `info`）为必填。后端通过 `PUSH_SERVER_URL` 配置地址（默认 `https://push-server.o1-1.xct258.top`），可用 `GET /api/monitor/health` 检查连通性。消息列表里每条报警的「消除报警」只作用于那条记录，不牵连同服务器的其他报警；原始记录仍保留，点「恢复」可以让它重新参与报警判断。
+> 服务信息的数据源是 push-server：服务器脚本 `POST /api/push` 上报，TaskOps 读取其 `GET /records` 并按 `server_name` 分组展示；卡片弹窗采用左右分栏：左侧按 `topic`（项目）→ `title`（服务）两级切换，右侧显示当前范围的记录并分页，支持「全部项目」和「全部服务」；移动端把左侧栏收进服务器名称旁边的按钮，按钮显示当前项目/服务，点击后弹窗选择。上报层级为 `server_name`（服务器）→ `topic`（项目）→ `title`（项目里的脚本）。`/api/push` 的 `category`（服务消息固定传 `service`）、`title` 和 `status`（`ok` / `warn` / `error` / `info`）为必填；TaskOps 向 `/api/task` 投递待办时固定传 `category: "todo"`。后端通过 `PUSH_SERVER_URL` 配置地址（默认 `https://push-server.o1-1.xct258.top`），可用 `GET /api/monitor/health` 检查连通性。消息列表里每条报警的「消除报警」只作用于那条记录，不牵连同服务器的其他报警；原始记录仍保留，点「恢复」可以让它重新参与报警判断。
 
 ---
 

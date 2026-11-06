@@ -64,8 +64,8 @@ def _to_iso(dt) -> str:
 
 
 def build_task_payload(todo, config: dict) -> dict:
-    """待办 → /api/task 请求体（message 只带内容/到期；标题走 title 字段，
-    push-server 下行拼成【待办提醒】标题+正文，避免标题重复两遍）。"""
+    """待办 → /api/task 请求体（category=todo；message 只带内容/到期；
+    标题走 title 字段，push-server 下行拼成【待办提醒】标题+正文，避免标题重复两遍）。"""
     lines = []
     if (todo.content or "").strip():
         lines.append(todo.content.strip())
@@ -73,6 +73,7 @@ def build_task_payload(todo, config: dict) -> dict:
         lines.append(f"到期：{todo.due_time.isoformat()}")
     return {
         "server_name": config["server_name"],
+        "category": "todo",
         "client_ref": f"todo-{todo.id}",
         "topic": config["topic"],
         "title": todo.title or "",

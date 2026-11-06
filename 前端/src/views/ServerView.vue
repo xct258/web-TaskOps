@@ -506,6 +506,7 @@ const EXAMPLE_PUSH = `curl -X POST ${PUSH_URL}/api/push \\
   -H 'Content-Type: application/json' \\
   -d '{
     "server_name": "o1-debian-1",
+    "category": "service",
     "topic": "server/khx-live",
     "title": "录播备份上传脚本",
     "message": "上传成功",
@@ -1119,6 +1120,10 @@ onUnmounted(() => {
 
         <div class="rounded-xl bg-white/5 border border-white/10 p-3 space-y-1 text-[10px] text-slate-400 leading-relaxed">
           <p><span class="text-slate-200 font-mono">server_name</span>：服务器名，页面按它分组</p>
+          <p>
+            <span class="text-slate-200 font-mono">category</span>：<b class="text-slate-200">必填</b>，
+            <code>service</code> 服务通知 / <code>todo</code> 待办提醒
+          </p>
           <p>
             <span class="text-slate-200 font-mono">topic</span>：项目 / 服务主题，例如
             <code>server/khx-live</code>，不需要重复服务器名

@@ -34,6 +34,7 @@ class PushTimeTests(unittest.TestCase):
                     created = todos.create_todo(todo, self.session)
                     self.assertEqual(jsonable_encoder(created)["mqtt_at"], "2026-10-12T20:30:00+08:00")
                     payload = build_task_payload(created, {"server_name": "taskops", "topic": "taskops/todo"})
+                    self.assertEqual(payload["category"], "todo")
                     self.assertEqual(payload["schedule_at"], "2026-10-12T20:30:00+08:00")
                     self.session.expire_all()
                     reloaded = todos.get_todos(limit=200, session=self.session)
