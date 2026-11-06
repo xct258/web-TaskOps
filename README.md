@@ -64,8 +64,12 @@ startup/                # 运行期
 ├── prepare.sh          # 每次启动：同步代码到 /app
 ├── once.sh             # 只执行一次
 ├── update.sh           # 自动更新（本仓库保持空操作）
-└── main.sh             # 启动 uvicorn + 静态服务器并常驻
-template/               # 模板固定的 Dockerfile 与 start.sh
+├── services.sh         # 声明 api + web 两个进程
+└── main.sh             # 固定薄壳：加载 supervisor + services
+template/               # 模板固定文件
+├── Dockerfile
+├── start.sh
+└── supervisor.sh       # 多进程启动/停止/日志/信号处理
 check.sh                # 本地自查（push 前运行）
 docker-compose.yml      # 运行容器（host 网络 + 数据卷）
 ```
@@ -106,6 +110,8 @@ services:
       - ./app:/app            # 代码 + 数据库持久化
       - ./data:/data          # 模板日志与一次性启动标记
     restart: unless-stopped
+    init: true                # 多进程容器用 tini 回收孤儿进程
+    stop_grace_period: 30s
 ```
 
 ### 3. 访问
@@ -124,12 +130,13 @@ services:
    后端用 `cp -rn` 从 `/opt/taskops/后端` 补到 `/app/后端`（保住 `data/` 与用户改动）；`chmod -R a+rX /app/前端`。
 2. `startup/update.sh`：本仓库为空操作，版本跟随镜像。
 3. `startup/once.sh`：只执行一次，确保 `/app/后端/data` 存在。
-4. `startup/main.sh`：后台启动后端 `uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8481`，
-   启动前端静态服务器 `python3 -m http.server 8281 --directory /app/前端`。
-   任一进程退出，容器结束并由 `restart` 策略拉起；`docker stop` 时两个进程一起停止。
+4. `startup/main.sh`：固定薄壳，加载 `template/supervisor.sh` 和 `startup/services.sh`。
+   `services.sh` 声明后端 `uvicorn main:app --app-dir /app/后端 --host 0.0.0.0 --port 8481`
+   和前端静态服务器 `python3 -m http.server 8281 --directory /app/前端`。
+   任一进程退出，两个都停止，容器结束并由 `restart` 策略拉起；`docker stop` 时依次停止并等待超时。
 
-服务日志写在容器内 `/data/logs/service/service.log`（宿主机 `./data/logs/...`），
-启动脚本日志在 `/data/logs/<脚本名>/...`。
+服务日志按进程分别写在容器内 `/data/logs/service/<名称>.log`（如 `api.log`、`web.log`；
+宿主机 `./data/logs/service/...`），启动脚本日志在 `/data/logs/<脚本名>/...`。
 
 ---
 

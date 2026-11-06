@@ -4,6 +4,10 @@ services:
     image: xct258/taskops:latest
     network_mode: host
     restart: unless-stopped
+    # 多进程容器用 tini 回收孤儿进程
+    init: true
+    # 停止 api + web 的总时间大于默认 10s
+    stop_grace_period: 30s
     volumes:
       # 应用代码 + SQLite 数据库持久化
       - ./app:/app
