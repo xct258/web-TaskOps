@@ -296,10 +296,18 @@ export const api = {
         method: 'POST',
         body: clean(data),
       }),
-    restoreRecord: (serverName, recordId) =>
-      request(`/monitor/servers/${encodeURIComponent(serverName)}/records/${recordId}/ack`, {
-        method: 'DELETE',
+    // 一键消除某台服务器下全部未消除的报警。
+    ackAll: (serverName) =>
+      request(`/monitor/servers/${encodeURIComponent(serverName)}/ack-all`, {
+        method: 'POST',
       }),
+    restoreRecord: (serverName, recordId, createdAt = '') => {
+      const query = createdAt ? `?created_at=${encodeURIComponent(createdAt)}` : ''
+      return request(
+        `/monitor/servers/${encodeURIComponent(serverName)}/records/${recordId}/ack${query}`,
+        { method: 'DELETE' },
+      )
+    },
   },
 
   /* ----------------------------- 账本 ----------------------------- */

@@ -137,18 +137,57 @@ def _record_id(record: dict) -> int:
         return 0
 
 
+def _worst_alarm(records: List[dict]) -> Optional[dict]:
+    """在所有未消除记录里找最严重的报警。
+
+    records 已按时间倒序；同一级别保留最先遇到的一条（即最新的一条）。
+    只有显式「消除」才会让报警失效，后来的正常/信息记录不会自动覆盖它。
+    """
+    worst = None
+    for record in records:
+        if record["acked"] or record["severity"] not in ("error", "warn"):
+            continue
+        if worst is None or SEVERITY_RANK.get(record["severity"], 9) < SEVERITY_RANK.get(
+            worst["severity"], 9
+        ):
+            worst = record
+    return worst
+
+
 def _ack_key(server_name: str, record: dict) -> tuple:
-    """单条记录的消除键：有 id 用 id，没有 id 才退回上报时间。"""
-    record_id = _record_id(record)
-    if record_id:
-        return (server_name, record_id, "")
-    return (server_name, 0, _created_at(record))
+    """记录消除键：id + 上报时间。
+
+    覆盖模式会复用 id 但更新时间；把 created_at 一起作为键，新内容就不会
+    继承上一次的消除状态。
+    """
+    return (server_name, _record_id(record), _created_at(record))
 
 
 def _ack_row_key(row: MonitorRecordAck) -> tuple:
-    if row.record_id:
-        return (row.server_name, row.record_id, "")
-    return (row.server_name, 0, row.record_created_at)
+    return (row.server_name, row.record_id or 0, row.record_created_at or "")
+
+
+def _upsert_ack(session: Session, server_name: str, record: dict) -> None:
+    """写入/更新一条记录的消除标记（不提交事务）。"""
+    rid = _record_id(record)
+    created_at = _created_at(record)
+    statement = select(MonitorRecordAck).where(
+        MonitorRecordAck.server_name == server_name,
+        MonitorRecordAck.record_id == rid,
+    )
+    # 有上报时间时按 id + 时间精确匹配；没有时间的老数据保持原来的 id 匹配。
+    if created_at:
+        statement = statement.where(MonitorRecordAck.record_created_at == created_at)
+    elif not rid:
+        statement = statement.where(MonitorRecordAck.record_created_at == "")
+
+    row = session.exec(statement).first()
+    if row is None:
+        row = MonitorRecordAck(server_name=server_name, record_id=rid)
+    if created_at:
+        row.record_created_at = created_at
+    row.acked_at = shanghai_now()
+    session.add(row)
 
 
 def group_records(
@@ -182,12 +221,14 @@ def group_records(
 
         active = [record for record in group["records"] if not record["acked"]]
         all_acked = bool(group["records"]) and not active
-        latest = active[0] if active else group["records"][0]
+        worst = _worst_alarm(group["records"])
+        latest = worst or (active[0] if active else group["records"][0])
+        severity = worst["severity"] if worst else (latest["severity"] if active else "ok")
         result.append(
             {
                 "server_name": group["server_name"],
                 "topic": latest.get("topic") or "",
-                "severity": latest["severity"] if active else "ok",
+                "severity": severity,
                 "all_acked": all_acked,
                 "acked_count": len(group["records"]) - len(active),
                 "latest": latest,
@@ -260,25 +301,41 @@ def ack_record(
 
     rid = max(0, record_id)
     created_at = payload.created_at.strip()
-    statement = select(MonitorRecordAck).where(
-        MonitorRecordAck.server_name == name,
-        MonitorRecordAck.record_id == rid,
-    )
-    # id 缺失（0）时才用上报时间区分同服务器的多条记录。
-    if not rid:
-        statement = statement.where(MonitorRecordAck.record_created_at == created_at)
-
-    row = session.exec(statement).first()
-    if row is None:
-        row = MonitorRecordAck(server_name=name, record_id=rid)
-
-    if created_at:
-        row.record_created_at = created_at
-    row.acked_at = shanghai_now()
-    session.add(row)
+    _upsert_ack(session, name, {"id": rid, "created_at": created_at})
     session.commit()
 
     return {"ok": True, "server_name": name, "record_id": rid}
+
+
+@router.post("/monitor/servers/{server_name}/ack-all")
+def ack_all_records(
+    server_name: str,
+    session: Session = Depends(get_monitor_session),
+):
+    """一键消除某台服务器下全部未消除的记录。"""
+    name = server_name.strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="server_name 不能为空")
+
+    records = fetch_records(server_name=name)
+    acks = {_ack_row_key(row) for row in session.exec(select(MonitorRecordAck)).all()}
+    count = 0
+    for record in records:
+        source = str(record.get("server_name") or "").strip() or "未命名来源"
+        if source != name:
+            continue
+        # 只消除真正的报警，正常/信息类记录保持原样。
+        if detect_severity(record) not in ("error", "warn"):
+            continue
+        key = _ack_key(name, record)
+        if key in acks:
+            continue
+        _upsert_ack(session, name, record)
+        acks.add(key)
+        count += 1
+    session.commit()
+
+    return {"ok": True, "server_name": name, "acked": count}
 
 
 @router.delete("/monitor/servers/{server_name}/records/{record_id}/ack")
@@ -286,18 +343,23 @@ def restore_record(
     server_name: str,
     record_id: int,
     session: Session = Depends(get_monitor_session),
+    created_at: str = "",
 ):
     """恢复一条消息：删除这条消除记录，让它重新参与卡片摘要。"""
     name = server_name.strip()
     if not name:
         raise HTTPException(status_code=400, detail="server_name 不能为空")
 
-    rows = session.exec(
-        select(MonitorRecordAck).where(
-            MonitorRecordAck.server_name == name,
-            MonitorRecordAck.record_id == max(0, record_id),
-        )
-    ).all()
+    created = created_at.strip()
+    statement = select(MonitorRecordAck).where(
+        MonitorRecordAck.server_name == name,
+        MonitorRecordAck.record_id == max(0, record_id),
+    )
+    # 有上报时间时只恢复当前这一版，避免把覆盖前的旧消除记录一起删掉。
+    if created:
+        statement = statement.where(MonitorRecordAck.record_created_at == created)
+
+    rows = session.exec(statement).all()
     for row in rows:
         session.delete(row)
     if rows:

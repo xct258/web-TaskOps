@@ -2,6 +2,7 @@
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 
 import { api } from '@/api'
+import ConfirmDialog from '@/components/ConfirmDialog.vue'
 import EmptyState from '@/components/EmptyState.vue'
 import Icon from '@/components/Icon.vue'
 import ModalShell from '@/components/ModalShell.vue'
@@ -48,7 +49,7 @@ const SEVERITY_META = {
     iconClass: 'text-sky-400',
     dot: 'bg-sky-400',
     border: 'border-sky-400/20',
-    bg: 'bg-sky-500/[0.04]',
+    bg: 'bg-slate-900/55',
     chip: 'bg-sky-500/10 text-sky-200 border-sky-400/25',
   },
 }
@@ -77,10 +78,24 @@ const contentTop = ref(null)
 const mobilePickerOpen = ref(false)
 const mobileServiceTop = ref(null)
 const recordBusy = ref('')
+const ackAllOpen = ref(false)
+const ackAllGlobalOpen = ref(false)
 const RECORDS_PER_PAGE = 5
 
 const selectedServer = computed(
   () => servers.value.find((server) => server.server_name === selectedName.value) || null,
+)
+
+function alertCount(server) {
+  return (server?.records || []).filter(
+    (record) => !record.acked && (record.severity === 'error' || record.severity === 'warn'),
+  ).length
+}
+
+const unackedCount = computed(() => alertCount(selectedServer.value))
+
+const totalUnacked = computed(() =>
+  servers.value.reduce((sum, server) => sum + alertCount(server), 0),
 )
 
 const groupedRecords = computed(() => {
@@ -112,20 +127,30 @@ const groupedRecords = computed(() => {
         .map((script) => {
           script.records.sort(compareRecordsDesc)
           const latestActive = script.records.find((record) => !record.acked)
-          const latest = latestActive || script.records[0]
+          // 只要还有未消除的报警，脚本状态就保持为报警；后面的正常/信息记录不自动覆盖。
+          const worstAlarm = script.records.reduce((worst, record) => {
+            if (record.acked || (record.severity !== 'error' && record.severity !== 'warn')) {
+              return worst
+            }
+            if (!worst) return record
+            return severityRank(record.severity) < severityRank(worst.severity) ? record : worst
+          }, null)
+          const latest = worstAlarm || latestActive || script.records[0]
+          const newest = script.records.reduce(
+            (best, record) => (!best || compareByTimeDesc(record, best) < 0 ? record : best),
+            null,
+          )
           return {
             ...script,
             count: script.records.length,
             latest,
             latestActive,
-            severity: latestActive?.severity || 'ok',
+            newest,
+            worstAlarm,
+            severity: worstAlarm?.severity || 'ok',
           }
         })
-        .sort((a, b) => {
-          const bySeverity = severityRank(a.severity) - severityRank(b.severity)
-          if (bySeverity) return bySeverity
-          return compareRecordsDesc(a.latestActive || a.latest, b.latestActive || b.latest)
-        })
+        .sort((a, b) => compareByTimeDesc(a.newest, b.newest))
 
       const severity =
         scripts.reduce(
@@ -141,6 +166,10 @@ const groupedRecords = computed(() => {
         return String(candidate.created_at || '') > String(newest?.created_at || '') ? candidate : newest
       }, null)
       const latest = latestActive || scripts[0]?.latest || null
+      const newest = scripts.reduce(
+        (best, script) => (!best || compareByTimeDesc(script.newest, best) < 0 ? script.newest : best),
+        null,
+      )
 
       return {
         topic: project.topic,
@@ -148,14 +177,11 @@ const groupedRecords = computed(() => {
         scripts,
         severity,
         latest,
+        newest,
         count: scripts.reduce((sum, script) => sum + script.count, 0),
       }
     })
-    .sort((a, b) => {
-      const bySeverity = severityRank(a.severity) - severityRank(b.severity)
-      if (bySeverity) return bySeverity
-      return compareRecordsDesc(a.latest, b.latest)
-    })
+    .sort((a, b) => compareByTimeDesc(a.newest, b.newest))
 })
 
 const serviceTotal = computed(() =>
@@ -171,13 +197,15 @@ const serviceOptions = computed(() => {
     ? groupedRecords.value.filter((project) => project.topic === activeProject.value)
     : groupedRecords.value
 
-  return projects.flatMap((project) =>
-    project.scripts.map((script) => ({
-      ...script,
-      projectName: project.name,
-      projectTopic: project.topic,
-    })),
-  )
+  return projects
+    .flatMap((project) =>
+      project.scripts.map((script) => ({
+        ...script,
+        projectName: project.name,
+        projectTopic: project.topic,
+      })),
+    )
+    .sort((a, b) => compareByTimeDesc(a.newest, b.newest))
 })
 
 const activeServiceOption = computed(
@@ -199,7 +227,8 @@ const contentRecords = computed(() => {
       }
       return true
     })
-    .sort(compareRecordsDesc)
+    // 全部项目 / 全部服务按推送时间倒序；选中具体服务时优先展示未消除和报警。
+    .sort(activeService.value ? compareRecordCards : compareByTimeDesc)
 })
 
 const contentTitle = computed(() => {
@@ -258,10 +287,26 @@ function severityRank(severity) {
   return SEVERITY_RANK[severity] ?? 9
 }
 
-function compareRecordsDesc(a, b) {
+function compareByTimeDesc(a, b) {
   const byTime = String(b?.created_at || '').localeCompare(String(a?.created_at || ''))
   if (byTime) return byTime
   return Number(b?.id || 0) - Number(a?.id || 0)
+}
+
+function compareRecordsDesc(a, b) {
+  // 未消除的记录排在已消除的记录上面
+  const byAck = Number(!!a?.acked) - Number(!!b?.acked)
+  if (byAck) return byAck
+  return compareByTimeDesc(a, b)
+}
+
+/** 记录卡片展示顺序：未消除优先，其次异常/警告优先，最后按时间倒序。 */
+function compareRecordCards(a, b) {
+  const byAck = Number(!!a?.acked) - Number(!!b?.acked)
+  if (byAck) return byAck
+  const bySeverity = severityRank(a?.severity) - severityRank(b?.severity)
+  if (bySeverity) return bySeverity
+  return compareRecordsDesc(a, b)
 }
 
 function scrollContentTop() {
@@ -388,6 +433,13 @@ function matchFilter(server, value) {
   return server.severity === value
 }
 
+function newestMessageTime(server) {
+  return (server.records || []).reduce((newest, record) => {
+    const time = String(record?.created_at || '')
+    return time > newest ? time : newest
+  }, '')
+}
+
 const visible = computed(() => {
   const keyword = search.value.trim().toLowerCase()
 
@@ -399,11 +451,13 @@ const visible = computed(() => {
       .some((field) => String(field).toLowerCase().includes(keyword))
   })
 
-  // 异常 → 警告 → 正常；同级别内按最新上报时间倒序。
+  // 未消除的在前，再按最新消息推送时间倒序；同时间才按异常/警告/正常兜底。
   return rows.sort((a, b) => {
-    const rank = (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
-    if (rank) return rank
-    return String(b.latest?.created_at || '').localeCompare(String(a.latest?.created_at || ''))
+    const byAck = Number(!!a.all_acked) - Number(!!b.all_acked)
+    if (byAck) return byAck
+    const byTime = newestMessageTime(b).localeCompare(newestMessageTime(a))
+    if (byTime) return byTime
+    return (SEVERITY_RANK[a.severity] ?? 9) - (SEVERITY_RANK[b.severity] ?? 9)
   })
 })
 
@@ -465,12 +519,64 @@ async function restoreRecord(record, event) {
   const key = recordBusyKey(record)
   recordBusy.value = key
   try {
-    await api.monitor.restoreRecord(selectedName.value, record.id ?? 0)
+    await api.monitor.restoreRecord(
+      selectedName.value,
+      record.id ?? 0,
+      record.created_at || '',
+    )
     toast.success('已恢复这条报警')
     await load(true, true)
     loadSummary()
   } catch (err) {
     toast.error(`恢复报警失败：${err.message}`)
+  } finally {
+    recordBusy.value = ''
+  }
+}
+
+async function doAckAll() {
+  const server = selectedServer.value
+  if (!server || recordBusy.value) return
+  recordBusy.value = 'ack-all'
+  try {
+    const result = await api.monitor.ackAll(server.server_name)
+    toast.success(`已消除 ${result?.acked ?? 0} 条报警`)
+    ackAllOpen.value = false
+    await load(true, true)
+    loadSummary()
+  } catch (err) {
+    toast.error(`一键消除失败：${err.message}`)
+  } finally {
+    recordBusy.value = ''
+  }
+}
+
+async function doAckAllGlobal() {
+  if (recordBusy.value) return
+  const targets = servers.value.filter((server) => alertCount(server) > 0)
+  if (!targets.length) {
+    ackAllGlobalOpen.value = false
+    return
+  }
+
+  recordBusy.value = 'ack-all-global'
+  try {
+    const results = await Promise.allSettled(
+      targets.map((server) => api.monitor.ackAll(server.server_name)),
+    )
+    const total = results.reduce(
+      (sum, result) =>
+        sum + (result.status === 'fulfilled' ? result.value?.acked || 0 : 0),
+      0,
+    )
+    const failed = results.filter((result) => result.status === 'rejected').length
+    if (failed) toast.error(`已消除 ${total} 条，${failed} 台服务器失败`)
+    else toast.success(`已消除 ${total} 条报警`)
+    ackAllGlobalOpen.value = false
+    await load(true, true)
+    loadSummary()
+  } catch (err) {
+    toast.error(`一键消除失败：${err.message}`)
   } finally {
     recordBusy.value = ''
   }
@@ -567,6 +673,16 @@ onUnmounted(() => {
       </div>
 
       <div class="flex items-center gap-2 ml-auto">
+        <button
+          v-if="totalUnacked > 0"
+          class="flex items-center gap-1 px-2.5 py-1.5 rounded-xl border border-amber-400/30 bg-amber-500/10 text-amber-200 hover:bg-amber-500/15 active:bg-amber-500/20 text-xs font-mono transition disabled:opacity-50"
+          :disabled="recordBusy === 'ack-all-global'"
+          title="消除全部未消除报警"
+          @click="ackAllGlobalOpen = true"
+        >
+          <Icon name="check" :size="13" />
+          <span class="hidden xs:inline">一键消除</span>
+        </button>
         <button
           class="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-slate-400 hover:text-slate-200 transition"
           title="搜索（/）"
@@ -708,6 +824,16 @@ onUnmounted(() => {
       max-width="max-w-4xl"
     >
       <template #header-actions>
+        <button
+          v-if="unackedCount > 0"
+          class="flex shrink-0 items-center gap-1 rounded-lg border border-amber-400/30 bg-amber-500/10 px-2.5 py-1.5 text-[10px] font-mono text-amber-200 transition hover:bg-amber-500/15 active:bg-amber-500/20 disabled:opacity-50"
+          :disabled="recordBusy === 'ack-all'"
+          title="消除该服务器全部未消除报警"
+          @click="ackAllOpen = true"
+        >
+          <Icon name="check" :size="12" />
+          <span>一键消除</span>
+        </button>
         <button
           class="flex shrink-0 items-center gap-1.5 rounded-lg border border-white/15 bg-white/[0.06] px-2.5 py-1.5 text-[10px] font-mono text-slate-200 transition active:bg-white/15 lg:hidden"
           :title="`当前：${contentScope}；点击选择项目 / 服务`"
@@ -1155,5 +1281,23 @@ onUnmounted(() => {
         </div>
       </div>
     </ModalShell>
+
+    <ConfirmDialog
+      v-model="ackAllOpen"
+      title="一键消除"
+      :message="`确定消除 ${selectedServer?.server_name || ''} 下全部 ${unackedCount} 条未消除报警吗？`"
+      confirm-text="全部消除"
+      :danger="false"
+      @confirm="doAckAll"
+    />
+
+    <ConfirmDialog
+      v-model="ackAllGlobalOpen"
+      title="一键消除全部报警"
+      :message="`确定消除全部服务器上的 ${totalUnacked} 条未消除报警吗？`"
+      confirm-text="全部消除"
+      :danger="false"
+      @confirm="doAckAllGlobal"
+    />
   </div>
 </template>

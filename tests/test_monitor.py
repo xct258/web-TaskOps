@@ -104,6 +104,88 @@ class GroupTests(unittest.TestCase):
         self.assertEqual(groups[0]["severity"], "error")
         self.assertEqual([row["id"] for row in groups[0]["records"]], [2, 1])
 
+    def test_alert_in_another_script_is_not_hidden_by_newer_ok(self):
+        rows = [
+            record(
+                2, "nas", "备份成功", "2026-10-21 04:21:00",
+                status="ok", topic="server/backup", title="备份脚本",
+            ),
+            record(
+                1, "nas", "磁盘空间不足", "2026-10-20 04:21:00",
+                status="warn", topic="server/disk", title="磁盘检查",
+            ),
+        ]
+
+        groups = monitor.group_records(rows)
+
+        # 另一个脚本的最新消息是正常，但磁盘检查脚本仍有未消除警告。
+        self.assertEqual(groups[0]["severity"], "warn")
+        self.assertEqual(groups[0]["latest"]["id"], 1)
+        self.assertEqual(groups[0]["latest"]["title"], "磁盘检查")
+
+    def test_newer_ok_does_not_hide_unacked_alert(self):
+        rows = [
+            record(
+                2, "nas", "磁盘已恢复", "2026-10-21 04:21:00",
+                status="ok", topic="server/disk", title="磁盘检查",
+            ),
+            record(
+                1, "nas", "磁盘空间不足", "2026-10-20 04:21:00",
+                status="warn", topic="server/disk", title="磁盘检查",
+            ),
+        ]
+
+        groups = monitor.group_records(rows)
+
+        # 没有显式消除前，后到的正常消息不会让未消除的警报消失。
+        self.assertEqual(groups[0]["severity"], "warn")
+        self.assertEqual(groups[0]["latest"]["id"], 1)
+
+    def test_newer_info_does_not_hide_unacked_alert(self):
+        rows = [
+            record(
+                2, "nas", "推送测试", "2026-10-21 04:21:00",
+                status="info", topic="server/disk", title="磁盘检查",
+            ),
+            record(
+                1, "nas", "磁盘空间不足", "2026-10-20 04:21:00",
+                status="warn", topic="server/disk", title="磁盘检查",
+            ),
+        ]
+
+        groups = monitor.group_records(rows)
+
+        self.assertEqual(groups[0]["severity"], "warn")
+        self.assertEqual(groups[0]["latest"]["id"], 1)
+
+    def test_acking_alert_lets_newer_ok_show(self):
+        rows = [
+            record(
+                2, "nas", "磁盘已恢复", "2026-10-21 04:21:00",
+                status="ok", topic="server/disk", title="磁盘检查",
+            ),
+            record(
+                1, "nas", "磁盘空间不足", "2026-10-20 04:21:00",
+                status="warn", topic="server/disk", title="磁盘检查",
+            ),
+        ]
+
+        groups = monitor.group_records(rows, {("nas", 1, "2026-10-20 04:21:00")})
+
+        self.assertEqual(groups[0]["severity"], "ok")
+        self.assertEqual(groups[0]["latest"]["id"], 2)
+
+    def test_overwrite_with_new_timestamp_is_not_acked(self):
+        rows = [
+            record(3, "nas", "覆盖后的新报警", "2026-10-21 04:21:00", status="error"),
+        ]
+
+        groups = monitor.group_records(rows, {("nas", 3, "2026-10-20 04:21:00")})
+
+        # 覆盖模式复用 id 但 created_at 变了，不能被上一版消除状态继承。
+        self.assertFalse(groups[0]["records"][0]["acked"])
+        self.assertEqual(groups[0]["severity"], "error")
+
 
 class AckTests(unittest.TestCase):
     def test_acked_message_falls_back_to_previous_message(self):
@@ -112,7 +194,7 @@ class AckTests(unittest.TestCase):
             record(1, "nas", "docker.7z 成功", "2026-10-18 04:21:00", status="ok"),
         ]
 
-        groups = monitor.group_records(rows, {("nas", 3, "")})
+        groups = monitor.group_records(rows, {("nas", 3, "2026-10-20 04:21:00")})
 
         # 只消除 id=3 这条；卡片退回上一条正常消息。
         self.assertTrue(groups[0]["records"][0]["acked"])
@@ -127,7 +209,7 @@ class AckTests(unittest.TestCase):
             record(3, "nas", "旧报警", "2026-10-20 04:21:00", status="warn"),
         ]
 
-        groups = monitor.group_records(rows, {("nas", 4, "")})
+        groups = monitor.group_records(rows, {("nas", 4, "2026-10-21 04:21:00")})
 
         # 消除 id=4 后，id=3 仍然是未消除的报警。
         self.assertEqual(groups[0]["latest"]["id"], 3)
@@ -138,7 +220,7 @@ class AckTests(unittest.TestCase):
     def test_all_messages_acked_makes_server_normal(self):
         rows = [record(3, "nas", "备份失败", "2026-10-20 04:21:00", status="error")]
 
-        groups = monitor.group_records(rows, {("nas", 3, "")})
+        groups = monitor.group_records(rows, {("nas", 3, "2026-10-20 04:21:00")})
 
         self.assertEqual(groups[0]["severity"], "ok")
         self.assertTrue(groups[0]["all_acked"])
@@ -147,7 +229,7 @@ class AckTests(unittest.TestCase):
     def test_new_record_after_ack_shows_again(self):
         rows = [record(4, "nas", "备份又失败", "2026-10-21 04:21:00", status="error")]
 
-        groups = monitor.group_records(rows, {("nas", 3, "")})
+        groups = monitor.group_records(rows, {("nas", 3, "2026-10-20 04:21:00")})
 
         self.assertEqual(groups[0]["severity"], "error")
         self.assertFalse(groups[0]["all_acked"])
@@ -169,7 +251,7 @@ class AckTests(unittest.TestCase):
             record(4, "vps", "vps 报警", "2026-10-20 04:22:00", status="error"),
         ]
 
-        groups = monitor.group_records(rows, {("nas", 3, "")})
+        groups = monitor.group_records(rows, {("nas", 3, "2026-10-20 04:21:00")})
         by_name = {group["server_name"]: group for group in groups}
 
         self.assertEqual(by_name["nas"]["severity"], "ok")
@@ -217,6 +299,47 @@ class AckEndpointTests(unittest.TestCase):
         rows = self.session.exec(select(MonitorRecordAck)).all()
         self.assertEqual(len(rows), 1)
         self.assertEqual(rows[0].record_id, 3)
+
+    def test_overwrite_revision_ack_and_restore_are_independent(self):
+        monitor.ack_record(
+            "nas", 3, monitor.AckPayload(created_at="2026-10-20 04:21:00"), self.session
+        )
+        monitor.ack_record(
+            "nas", 3, monitor.AckPayload(created_at="2026-10-21 04:21:00"), self.session
+        )
+
+        rows = self.session.exec(select(MonitorRecordAck)).all()
+        self.assertEqual(
+            sorted(row.record_created_at for row in rows),
+            ["2026-10-20 04:21:00", "2026-10-21 04:21:00"],
+        )
+
+        monitor.restore_record("nas", 3, self.session, "2026-10-21 04:21:00")
+        rows = self.session.exec(select(MonitorRecordAck)).all()
+        self.assertEqual([row.record_created_at for row in rows], ["2026-10-20 04:21:00"])
+
+    def test_ack_all_marks_only_alerts_and_is_idempotent(self):
+        rows = [
+            record(1, "nas", "备份失败", "2026-10-20 04:21:00", status="error"),
+            record(2, "nas", "备份恢复", "2026-10-20 04:22:00", status="ok"),
+            record(4, "nas", "磁盘警告", "2026-10-20 04:24:00", status="warn"),
+            record(3, "vps", "登陆提醒", "2026-10-20 04:23:00", status="warn"),
+        ]
+
+        with patch.object(monitor, "fetch_records", return_value=rows):
+            result = monitor.ack_all_records("nas", self.session)
+        self.assertEqual(result["acked"], 2)
+
+        acked = self.session.exec(select(MonitorRecordAck)).all()
+        self.assertEqual(
+            {(row.server_name, row.record_id) for row in acked},
+            {("nas", 1), ("nas", 4)},
+        )
+
+        with patch.object(monitor, "fetch_records", return_value=rows):
+            again = monitor.ack_all_records("nas", self.session)
+        self.assertEqual(again["acked"], 0)
+        self.assertEqual(len(self.session.exec(select(MonitorRecordAck)).all()), 2)
 
 
 class FetchTests(unittest.TestCase):

@@ -28,10 +28,13 @@ const phaseText = computed(() => {
 
 const sizeText = computed(() => {
   if (!wallpaperPhase.value) return ''
+  const loaded = wallpaperProgress.loaded
+  const total = wallpaperProgress.total
   if (known.value) {
-    return `${formatBytes(wallpaperProgress.loaded)} / ${formatBytes(wallpaperProgress.total)}`
+    const remain = Math.max(0, total - loaded)
+    return `${formatBytes(loaded)} / ${formatBytes(total)} · 剩余 ${formatBytes(remain)}`
   }
-  if (wallpaperProgress.loaded > 0) return `已加载 ${formatBytes(wallpaperProgress.loaded)}`
+  if (loaded > 0) return `已加载 ${formatBytes(loaded)}`
   return ''
 })
 
@@ -109,7 +112,8 @@ function formatBytes(bytes) {
       </div>
 
       <p class="mt-3 text-[10px] tracking-wider text-slate-500">{{ phaseText }}</p>
-      <p v-if="sizeText" class="mt-1 font-mono text-[10px] tabular-nums text-slate-600">
+      <!-- 固定高度占位：大小文本出现时不把上面的加载元素顶上去 -->
+      <p class="mt-1 h-4 leading-4 font-mono text-[10px] tabular-nums text-slate-500">
         {{ sizeText }}
       </p>
     </div>
