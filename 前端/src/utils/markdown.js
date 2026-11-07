@@ -1,6 +1,6 @@
 // 轻量 Markdown 渲染器（无第三方依赖，先转义再套结构，避免 XSS）。
 // 支持：标题、粗体/斜体/删除线、行内代码、围栏代码块、引用、有序/无序列表、
-// 分隔线、链接、图片、段落。表格等复杂语法不解析，按段落输出。
+// 分隔线、链接、图片、表格、段落。
 function escapeHtml(str) {
   return String(str)
     .replace(/&/g, '&amp;')
@@ -31,6 +31,26 @@ function inline(text) {
   return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[Number(i)]}</code>`)
 }
 
+const TABLE_PIPE = '\u0001'
+
+function splitTableRow(line) {
+  let value = String(line).trim().replace(/\\\|/g, TABLE_PIPE)
+  if (value.startsWith('|')) value = value.slice(1)
+  if (value.endsWith('|')) value = value.slice(0, -1)
+  return value.split('|').map((cell) => cell.trim().split(TABLE_PIPE).join('|'))
+}
+
+function isTableDelimiter(line) {
+  const cells = splitTableRow(line)
+  return cells.length > 0 && cells.every((cell) => /^:?-{3,}:?$/.test(cell))
+}
+
+function tableAlignment(cell) {
+  const left = cell.startsWith(':')
+  const right = cell.endsWith(':')
+  return left && right ? 'center' : left ? 'left' : right ? 'right' : ''
+}
+
 export function renderMarkdown(source) {
   const lines = String(source || '')
     .replace(/\r\n?/g, '\n')
@@ -48,7 +68,8 @@ export function renderMarkdown(source) {
     }
   }
 
-  for (const line of lines) {
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i]
     const fence = line.match(/^```\s*([\w-]*)/)
     if (fence) {
       if (inCode) {
@@ -113,6 +134,41 @@ export function renderMarkdown(source) {
         listType = 'ol'
       }
       html.push(`<li>${inline(ol[1])}</li>`)
+      continue
+    }
+
+    // 表格：当前行是表头，下一行是 | --- | :---: | 分隔行
+    if (line.includes('|') && i + 1 < lines.length && isTableDelimiter(lines[i + 1])) {
+      closeList()
+      const headers = splitTableRow(line)
+      const alignments = splitTableRow(lines[i + 1]).map(tableAlignment)
+      const rows = []
+      let j = i + 2
+      while (j < lines.length) {
+        const rowLine = lines[j]
+        if (!rowLine.trim() || !rowLine.includes('|')) break
+        rows.push(splitTableRow(rowLine))
+        j++
+      }
+
+      const style = (index) =>
+        alignments[index] ? ` style="text-align:${alignments[index]}"` : ''
+      const head = headers
+        .map((cell, index) => `<th${style(index)}>${inline(cell)}</th>`)
+        .join('')
+      const body = rows
+        .map(
+          (row) =>
+            `<tr>${headers
+              .map((_, index) => `<td${style(index)}>${inline(row[index] || '')}</td>`)
+              .join('')}</tr>`,
+        )
+        .join('')
+
+      html.push(
+        `<div class="md-table-wrap"><table><thead><tr>${head}</tr></thead><tbody>${body}</tbody></table></div>`,
+      )
+      i = j - 1
       continue
     }
 

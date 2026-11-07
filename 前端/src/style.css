@@ -184,6 +184,13 @@ select option {
   border-top: 1px solid rgba(255, 255, 255, 0.1);
   margin: 1em 0;
 }
+.md-preview .md-table-wrap {
+  margin: 0.7em 0;
+  overflow-x: auto;
+}
+.md-preview .md-table-wrap table {
+  margin: 0;
+}
 .md-preview table {
   border-collapse: collapse;
   margin: 0.7em 0;
