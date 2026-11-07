@@ -30,6 +30,13 @@ test('表格支持对齐和单元格行内格式', () => {
   assert.match(html, /<td style="text-align:center"><code>code<\/code><\/td>/)
 })
 
+test('cron 表达式里的星号不会被当成斜体', () => {
+  const html = renderMarkdown('调度：0 3 * * *（Asia/Shanghai）')
+
+  assert.equal(html, '<p>调度：0 3 * * *（Asia/Shanghai）</p>')
+  assert.doesNotMatch(html, /<em>/)
+})
+
 test('普通段落里的竖线不会被误判为表格', () => {
   const html = renderMarkdown('命令：cat file | grep xxx')
 

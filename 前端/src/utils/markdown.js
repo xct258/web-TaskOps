@@ -25,8 +25,16 @@ function inline(text) {
     .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
     .replace(/__([^_]+)__/g, '<strong>$1</strong>')
     .replace(/~~([^~]+)~~/g, '<del>$1</del>')
-    .replace(/(^|[^*])\*([^*\n]+)\*/g, '$1<em>$2</em>')
-    .replace(/(^|[^_\w])_([^_\n]+)_/g, '$1<em>$2</em>')
+    .replace(/(^|[^*])\*([^*\n]+)\*/g, (match, prefix, content) =>
+      content.trim() && content === content.trim()
+        ? `${prefix}<em>${content}</em>`
+        : match,
+    )
+    .replace(/(^|[^_\w])_([^_\n]+)_/g, (match, prefix, content) =>
+      content.trim() && content === content.trim()
+        ? `${prefix}<em>${content}</em>`
+        : match,
+    )
 
   return t.replace(/\u0000(\d+)\u0000/g, (_, i) => `<code>${codes[Number(i)]}</code>`)
 }
