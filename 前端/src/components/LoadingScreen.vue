@@ -6,9 +6,12 @@ import { wallpaperProgress } from '@/composables/useWallpaper'
 
 const props = defineProps({
   wallpaperReady: { type: Boolean, default: false },
+  wallpaperTimedOut: { type: Boolean, default: false },
   authReady: { type: Boolean, default: false },
   contentReady: { type: Boolean, default: false },
 })
+
+defineEmits(['enter'])
 
 const known = computed(() => wallpaperProgress.known)
 const percent = computed(() => wallpaperProgress.percent)
@@ -17,6 +20,9 @@ const wallpaperPhase = computed(() => !props.wallpaperReady)
 const barKnown = computed(() => wallpaperPhase.value && known.value)
 
 const phaseText = computed(() => {
+  if (props.wallpaperTimedOut && !props.wallpaperReady) {
+    return '壁纸加载较慢，请选择是否进入'
+  }
   if (wallpaperPhase.value) {
     if (wallpaperProgress.phase === 'decoding') return '正在解码图片…'
     return known.value ? '正在下载壁纸…' : '正在加载壁纸…'
@@ -116,6 +122,20 @@ function formatBytes(bytes) {
       <p class="mt-1 h-4 leading-4 font-mono text-[10px] tabular-nums text-slate-500">
         {{ sizeText }}
       </p>
+
+      <div
+        v-if="wallpaperTimedOut && !wallpaperReady"
+        class="mt-4 flex w-full flex-col items-center gap-2.5"
+      >
+        <p class="text-[10px] text-amber-300/90">壁纸加载超过 15 秒，可先进入</p>
+        <button
+          type="button"
+          class="accent-button px-4 py-1.5 rounded-lg text-[11px] font-medium"
+          @click="$emit('enter')"
+        >
+          仍然进入
+        </button>
+      </div>
     </div>
   </div>
 </template>

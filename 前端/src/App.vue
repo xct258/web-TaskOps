@@ -11,7 +11,12 @@ import { auth, loadAuth } from '@/composables/useAuth'
 import { net } from '@/composables/useNet'
 import { preloadModules } from '@/composables/usePreload'
 import { loadSummary } from '@/composables/useSummary'
-import { preloadWallpaper, wallpaperReady } from '@/composables/useWallpaper'
+import {
+  enterWithoutWallpaper,
+  preloadWallpaper,
+  wallpaperReady,
+  wallpaperTimedOut,
+} from '@/composables/useWallpaper'
 
 let timer = null
 let idleTimer = null
@@ -85,6 +90,12 @@ function startSummary() {
   timer = setInterval(loadSummary, 60000)
 }
 
+/** 壁纸超时后用户选择「仍然进入」：壁纸和数据等待都直接放行。 */
+function enterApp() {
+  enterWithoutWallpaper()
+  finishData()
+}
+
 onMounted(() => {
   preloadWallpaper()
   loadAuth()
@@ -143,8 +154,10 @@ onUnmounted(() => {
     <LoadingScreen
       v-if="!bootComplete"
       :wallpaper-ready="wallpaperReady"
+      :wallpaper-timed-out="wallpaperTimedOut"
       :auth-ready="auth.checked"
       :content-ready="dataReady"
+      @enter="enterApp"
     />
   </Transition>
 

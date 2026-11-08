@@ -271,17 +271,45 @@ export const wallpaperBusy = ref(false)
 // 淡入时长（ms），与 AppBackground 的 duration-1000 对应。
 export const WALLPAPER_FADE_MS = 1000
 let fadeTimer = null
-// 首屏壁纸是否已就绪（加载成功或失败）：App.vue 用它决定何时显示正文
+// 首屏壁纸是否已就绪（加载成功或用户选择跳过）：App.vue 用它决定何时显示正文
 export const wallpaperReady = ref(false)
 
-// 安全兜底：超时后无论成败都放行，页面永不无限等待
+// 壁纸超过等待时间：不自动进界面，由用户在加载页上选择「继续等待」或「仍然进入」。
+export const wallpaperTimedOut = ref(false)
+
+// 超时后只弹选择，不再自动放行；用户点击「仍然进入」才会 markReady。
 const PRELOAD_TIMEOUT_MS = 15000
 let preloadStarted = false
 let safetyTimer = null
 
-function markReady() {
+function armSafetyTimer() {
+  if (safetyTimer) {
+    clearTimeout(safetyTimer)
+    safetyTimer = null
+  }
+  safetyTimer = setTimeout(() => {
+    safetyTimer = null
+    if (!wallpaperReady.value) {
+      wallpaperTimedOut.value = true
+    }
+  }, PRELOAD_TIMEOUT_MS)
+}
+
+function markReady(force = false) {
   if (wallpaperReady.value) return
+  // 超时后必须等用户明确选择，避免图片还没出来就自动进入主界面。
+  if (wallpaperTimedOut.value && !force) return
   wallpaperReady.value = true
+  wallpaperTimedOut.value = false
+  if (safetyTimer) {
+    clearTimeout(safetyTimer)
+    safetyTimer = null
+  }
+}
+
+/** 用户选择「仍然进入」：不等壁纸了，直接放行。 */
+export function enterWithoutWallpaper() {
+  markReady(true)
   if (safetyTimer) {
     clearTimeout(safetyTimer)
     safetyTimer = null
@@ -292,7 +320,7 @@ function markReady() {
 export async function preloadWallpaper() {
   if (preloadStarted) return
   preloadStarted = true
-  safetyTimer = setTimeout(markReady, PRELOAD_TIMEOUT_MS)
+  armSafetyTimer()
 
   try {
     const config = await api.config.get()
