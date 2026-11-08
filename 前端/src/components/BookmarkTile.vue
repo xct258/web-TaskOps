@@ -74,7 +74,7 @@ function guardClick(e) {
 <template>
   <a
     :href="bookmark.url"
-    target="_blank"
+    target="_self"
     rel="noopener noreferrer"
     class="group/item accent-hover-border relative flex items-center gap-2 p-1.5 rounded-xl bg-slate-900/60 hover:bg-slate-900/85 border border-white/10 transition-all duration-200 overflow-hidden"
     @click.capture="guardClick"
