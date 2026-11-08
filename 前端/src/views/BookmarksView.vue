@@ -194,18 +194,18 @@ function onOpen(bookmark) {
   recordVisit(bookmark)
 }
 
-function openInNewWindow(bookmark) {
+function openInNewTab(bookmark) {
   if (!bookmark?.url) return
   recordVisit(bookmark)
-  // 指定尺寸让浏览器以独立窗口打开；noopener 避免新页面拿到 window.opener。
-  window.open(bookmark.url, '_blank', 'width=1200,height=800,noopener,noreferrer')
+  // 和原来直接点击书签一致：新标签页打开，noopener 避免新页面拿到 window.opener。
+  window.open(bookmark.url, '_blank', 'noopener,noreferrer')
 }
 
 // 卡片操作菜单：右键 / 长按调起全局菜单（由 BookmarkTile 组件统一处理）。
 function openCardMenu(bookmark, x, y, fromTouch = false) {
   menu.open(
     [
-      { key: 'new-window', label: '新建窗口打开', action: () => openInNewWindow(bookmark) },
+      { key: 'new-tab', label: '新建标签页打开', action: () => openInNewTab(bookmark) },
       { key: 'edit', label: '编辑', action: () => openEdit(bookmark) },
       { key: 'favicon', label: '更新图标', action: () => refreshFavicon(bookmark) },
       { key: 'copy', label: '复制链接', action: () => copyLink(bookmark) },
