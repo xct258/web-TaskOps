@@ -142,15 +142,6 @@ onUnmounted(() => {
 <template>
   <AppBackground />
 
-  <!-- 顶部主题色细线：随壁纸换色，作为全站最轻的强调 -->
-  <div
-    class="pointer-events-none fixed inset-x-0 top-0 z-20 h-px"
-    :style="{
-      background:
-        'linear-gradient(90deg, transparent, rgba(var(--wp-accent-rgb), 0.55), transparent)',
-    }"
-  />
-
   <!-- 壁纸、登录状态、页面数据都就绪前保持加载页；就绪后淡出，露出登录页/主界面 -->
   <Transition name="loading-fade">
     <LoadingScreen
