@@ -28,17 +28,27 @@ async function submit() {
     <form
       class="w-full max-w-sm rounded-2xl border bg-slate-900/80 p-6 sm:p-7 shadow-2xl animate-scale-in"
       :style="{ borderColor: 'rgba(var(--wp-accent-rgb), 0.16)' }"
+      autocomplete="off"
       @submit.prevent="submit"
     >
       <p class="text-[11px] font-mono text-slate-400 mb-5">请输入访问密码后继续</p>
 
-      <label class="block text-[10px] font-mono text-slate-500 mb-1.5" for="taskops-password">访问密码</label>
+      <label class="block text-[10px] font-mono text-slate-500 mb-1.5" for="taskops-access-code">访问密码</label>
       <input
-        id="taskops-password"
+        id="taskops-access-code"
         ref="inputEl"
         v-model="password"
         type="password"
-        autocomplete="current-password"
+        name="taskops-access-code"
+        autocomplete="off"
+        autocapitalize="off"
+        autocorrect="off"
+        spellcheck="false"
+        data-bwignore="true"
+        data-1p-ignore="true"
+        data-lpignore="true"
+        data-form-type="other"
+        data-protonpass-ignore="true"
         placeholder="••••••••"
         class="accent-focus w-full px-3 py-2.5 bg-slate-950 border border-white/10 rounded-xl text-white text-sm placeholder-slate-600 focus:outline-none transition"
         @input="auth.error = ''"
