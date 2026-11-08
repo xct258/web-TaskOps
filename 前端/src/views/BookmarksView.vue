@@ -205,8 +205,8 @@ function openInNewWindow(bookmark) {
 function openCardMenu(bookmark, x, y, fromTouch = false) {
   menu.open(
     [
-      { key: 'edit', label: '编辑', action: () => openEdit(bookmark) },
       { key: 'new-window', label: '新建窗口打开', action: () => openInNewWindow(bookmark) },
+      { key: 'edit', label: '编辑', action: () => openEdit(bookmark) },
       { key: 'favicon', label: '更新图标', action: () => refreshFavicon(bookmark) },
       { key: 'copy', label: '复制链接', action: () => copyLink(bookmark) },
       { key: 'delete', label: '删除', danger: true, action: () => askDelete(bookmark) },
