@@ -307,13 +307,25 @@ export async function preloadWallpaper() {
   try {
     const loaded = await toDisplayUrl(buildUrl(currentSeed), updateProgress, applyTheme)
     displayUrl = loaded.url
-    wallpaperProgress.phase = 'decoding'
-    await decodeImage(displayUrl)
     applyTheme(loaded.theme)
+
+    if (displayUrl && !/^https?:/i.test(displayUrl)) {
+      // fetch 成功时是 blob/data URL，可以真正做到「先解码再显示」。
+      wallpaperProgress.phase = 'decoding'
+      await decodeImage(displayUrl)
+      currentObjectUrl = displayUrl
+      wallpaper.value = `url("${displayUrl}")`
+    } else if (displayUrl) {
+      // fetch 失败（通常是接口不允许 CORS）时退回原始地址。
+      // 这里只让背景层加载一次；不要再 new Image 预加载，否则每次请求都随机换一张图，
+      // 会出现「加载页结束后背景又变了一张」的现象。
+      wallpaperProgress.phase = 'decoding'
+      wallpaper.value = `url("${displayUrl}")`
+      await new Promise((resolve) => setTimeout(resolve, 120))
+    }
+
     wallpaperProgress.phase = 'ready'
     wallpaperProgress.percent = 100
-    currentObjectUrl = displayUrl
-    wallpaper.value = `url("${displayUrl}")`
   } catch (_) {
     // 壁纸加载失败时不把用户卡在加载页；已创建的 blob 顺手释放，背景保持暗色。
     revoke(displayUrl)
@@ -331,7 +343,11 @@ export async function refreshWallpaper() {
   try {
     const loaded = await toDisplayUrl(buildUrl(nextSeed, { bust: true }))
     displayUrl = loaded.url
-    await decodeImage(displayUrl)
+    // 只有 blob/data URL 才做独立解码；远程地址交给背景层加载一次，
+    // 避免随机图接口被请求两次后变成另一张图。
+    if (!/^https?:/i.test(displayUrl)) {
+      await decodeImage(displayUrl)
+    }
     // 新图解码完成后，再让界面主题色跟着一起切换。
     applyTheme(loaded.theme)
   } catch (_) {

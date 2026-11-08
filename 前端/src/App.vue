@@ -26,6 +26,17 @@ const ready = computed(
   () => auth.checked && wallpaperReady.value && (!auth.authenticated || dataReady.value),
 )
 
+// 首屏只加载一次：ready 之后即使登录态/数据状态变化，也不再重新盖加载页，
+// 避免偶尔出现「刚进主界面又闪一下加载页、背景像重新加载」。
+const bootComplete = ref(false)
+watch(
+  ready,
+  (value) => {
+    if (value) bootComplete.value = true
+  },
+  { immediate: true },
+)
+
 const DATA_TIMEOUT_MS = 8000
 
 function clearDataTimers() {
@@ -130,7 +141,7 @@ onUnmounted(() => {
   <!-- 壁纸、登录状态、页面数据都就绪前保持加载页；就绪后淡出，露出登录页/主界面 -->
   <Transition name="loading-fade">
     <LoadingScreen
-      v-if="!ready"
+      v-if="!bootComplete"
       :wallpaper-ready="wallpaperReady"
       :auth-ready="auth.checked"
       :content-ready="dataReady"
@@ -145,7 +156,7 @@ onUnmounted(() => {
   <div
     v-else-if="auth.checked && auth.authenticated"
     class="relative z-10 h-full w-full max-w-7xl mx-auto flex flex-col px-3 sm:px-6 py-2.5 sm:py-3.5 overflow-hidden animate-fade-up"
-    :class="ready ? 'visible' : 'invisible'"
+    :class="bootComplete || ready ? 'visible' : 'invisible'"
   >
     <AppHeader />
     <main class="flex-1 min-h-0 overflow-hidden flex flex-col mt-2">
