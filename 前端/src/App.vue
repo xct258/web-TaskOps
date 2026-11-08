@@ -14,6 +14,8 @@ import { loadSummary } from '@/composables/useSummary'
 import {
   enterWithoutWallpaper,
   preloadWallpaper,
+  retryWallpaper,
+  wallpaperFailed,
   wallpaperReady,
   wallpaperTimedOut,
 } from '@/composables/useWallpaper'
@@ -155,9 +157,11 @@ onUnmounted(() => {
       v-if="!bootComplete"
       :wallpaper-ready="wallpaperReady"
       :wallpaper-timed-out="wallpaperTimedOut"
+      :wallpaper-failed="wallpaperFailed"
       :auth-ready="auth.checked"
       :content-ready="dataReady"
       @enter="enterApp"
+      @retry="retryWallpaper"
     />
   </Transition>
 

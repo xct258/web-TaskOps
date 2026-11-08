@@ -239,9 +239,9 @@ async function toDisplayUrl(url, onProgress, onTheme) {
     }
 
     if (!blob.size) throw new Error('empty image')
-    return { url: URL.createObjectURL(blob), theme }
+    return { url: URL.createObjectURL(blob), theme, fallback: false }
   } catch (_) {
-    return { url, theme: null }
+    return { url, theme: null, fallback: true }
   }
 }
 
@@ -274,73 +274,118 @@ let fadeTimer = null
 // 首屏壁纸是否已就绪（加载成功或用户选择跳过）：App.vue 用它决定何时显示正文
 export const wallpaperReady = ref(false)
 
-// 壁纸超过等待时间：不自动进界面，由用户在加载页上选择「继续等待」或「仍然进入」。
+// 壁纸超过等待时间 / 加载失败：不自动进界面，由用户在加载页上选择重试或仍然进入。
 export const wallpaperTimedOut = ref(false)
+export const wallpaperFailed = ref(false)
 
-// 超时后只弹选择，不再自动放行；用户点击「仍然进入」才会 markReady。
+// 超时/失败后只弹选择，不再自动放行；用户明确点击才会 markReady。
 const PRELOAD_TIMEOUT_MS = 15000
 let preloadStarted = false
 let safetyTimer = null
+// 每次预加载/重试一个代号，避免旧请求晚到后覆盖新状态。
+let attemptSeq = 0
 
-function armSafetyTimer() {
+function clearSafetyTimer() {
   if (safetyTimer) {
     clearTimeout(safetyTimer)
     safetyTimer = null
   }
+}
+
+function armSafetyTimer(attempt) {
+  clearSafetyTimer()
   safetyTimer = setTimeout(() => {
     safetyTimer = null
-    if (!wallpaperReady.value) {
-      wallpaperTimedOut.value = true
-    }
+    if (attempt !== attemptSeq || wallpaperReady.value) return
+    wallpaperTimedOut.value = true
   }, PRELOAD_TIMEOUT_MS)
 }
 
 function markReady(force = false) {
   if (wallpaperReady.value) return
-  // 超时后必须等用户明确选择，避免图片还没出来就自动进入主界面。
-  if (wallpaperTimedOut.value && !force) return
+  // 超时或失败后必须等用户明确选择，避免图片还没出来就自动进入主界面。
+  if (!force && (wallpaperTimedOut.value || wallpaperFailed.value)) return
   wallpaperReady.value = true
   wallpaperTimedOut.value = false
-  if (safetyTimer) {
-    clearTimeout(safetyTimer)
-    safetyTimer = null
-  }
+  wallpaperFailed.value = false
+  clearSafetyTimer()
 }
 
 /** 用户选择「仍然进入」：不等壁纸了，直接放行。 */
 export function enterWithoutWallpaper() {
   markReady(true)
-  if (safetyTimer) {
-    clearTimeout(safetyTimer)
-    safetyTimer = null
-  }
+  clearSafetyTimer()
 }
 
-/** 预加载首屏壁纸：先取运行时配置，等图片下载并解码完成后再放行登录页。 */
-export async function preloadWallpaper() {
-  if (preloadStarted) return
-  preloadStarted = true
-  armSafetyTimer()
+/** 用户选择「重新加载」：清掉旧状态，重新走一次完整的壁纸加载。 */
+export async function retryWallpaper() {
+  const attempt = ++attemptSeq
+  clearSafetyTimer()
+  wallpaperTimedOut.value = false
+  wallpaperFailed.value = false
+  resetProgress()
+  revoke(currentObjectUrl)
+  currentObjectUrl = ''
+  wallpaper.value = ''
+  wallpaperNext.value = ''
+  wallpaperFading.value = false
+  armSafetyTimer(attempt)
+  await runPreload(attempt)
+}
 
+async function runPreload(attempt) {
   try {
     const config = await api.config.get()
+    if (attempt !== attemptSeq) return
     const configured = String(config?.wallpaperApiUrl || '').trim()
     if (configured) apiBase = configured
   } catch (_) {
     // 配置接口不可用时继续用默认地址，不阻塞页面。
   }
 
+  if (attempt !== attemptSeq) return
+
   let displayUrl = ''
   resetProgress()
+  const onProgress = (loaded, total, force = false) => {
+    if (attempt === attemptSeq) updateProgress(loaded, total, force)
+  }
+  const onTheme = (theme) => {
+    if (attempt === attemptSeq) applyTheme(theme)
+  }
+
   try {
-    const loaded = await toDisplayUrl(buildUrl(currentSeed), updateProgress, applyTheme)
+    const loaded = await toDisplayUrl(
+      buildUrl(currentSeed),
+      onProgress,
+      onTheme,
+    )
+    if (attempt !== attemptSeq) {
+      revoke(loaded.url)
+      return
+    }
+
     displayUrl = loaded.url
     applyTheme(loaded.theme)
+
+    if (loaded.fallback) {
+      // fetch 失败（网络/CORS）：仍把原地址交给背景层加载一次，但明确进入失败态，
+      // 让用户看到「重新加载 / 仍然进入」选择，而不是悄悄进主界面。
+      wallpaperProgress.phase = 'failed'
+      wallpaper.value = `url("${displayUrl}")`
+      wallpaperFailed.value = true
+      clearSafetyTimer()
+      return
+    }
 
     if (displayUrl && !/^https?:/i.test(displayUrl)) {
       // fetch 成功时是 blob/data URL，可以真正做到「先解码再显示」。
       wallpaperProgress.phase = 'decoding'
       await decodeImage(displayUrl)
+      if (attempt !== attemptSeq) {
+        revoke(displayUrl)
+        return
+      }
       currentObjectUrl = displayUrl
       wallpaper.value = `url("${displayUrl}")`
     } else if (displayUrl) {
@@ -352,14 +397,27 @@ export async function preloadWallpaper() {
       await new Promise((resolve) => setTimeout(resolve, 120))
     }
 
+    if (attempt !== attemptSeq) return
     wallpaperProgress.phase = 'ready'
     wallpaperProgress.percent = 100
-  } catch (_) {
-    // 壁纸加载失败时不把用户卡在加载页；已创建的 blob 顺手释放，背景保持暗色。
-    revoke(displayUrl)
-  } finally {
     markReady()
+  } catch (_) {
+    if (attempt !== attemptSeq) return
+    // 失败不再自动进界面：留在加载页，给用户「重新加载」和「仍然进入」两个选择。
+    revoke(displayUrl)
+    wallpaperProgress.phase = 'failed'
+    wallpaperFailed.value = true
+    clearSafetyTimer()
   }
+}
+
+/** 预加载首屏壁纸：先取运行时配置，等图片下载并解码完成后再放行登录页。 */
+export async function preloadWallpaper() {
+  if (preloadStarted) return
+  preloadStarted = true
+  const attempt = ++attemptSeq
+  armSafetyTimer(attempt)
+  await runPreload(attempt)
 }
 
 export async function refreshWallpaper() {

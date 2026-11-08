@@ -7,11 +7,12 @@ import { wallpaperProgress } from '@/composables/useWallpaper'
 const props = defineProps({
   wallpaperReady: { type: Boolean, default: false },
   wallpaperTimedOut: { type: Boolean, default: false },
+  wallpaperFailed: { type: Boolean, default: false },
   authReady: { type: Boolean, default: false },
   contentReady: { type: Boolean, default: false },
 })
 
-defineEmits(['enter'])
+defineEmits(['enter', 'retry'])
 
 const known = computed(() => wallpaperProgress.known)
 const percent = computed(() => wallpaperProgress.percent)
@@ -20,6 +21,9 @@ const wallpaperPhase = computed(() => !props.wallpaperReady)
 const barKnown = computed(() => wallpaperPhase.value && known.value)
 
 const phaseText = computed(() => {
+  if (props.wallpaperFailed && !props.wallpaperReady) {
+    return '壁纸加载失败，请重新加载或先进入'
+  }
   if (props.wallpaperTimedOut && !props.wallpaperReady) {
     return '壁纸加载较慢，请选择是否进入'
   }
@@ -124,17 +128,28 @@ function formatBytes(bytes) {
       </p>
 
       <div
-        v-if="wallpaperTimedOut && !wallpaperReady"
+        v-if="(wallpaperFailed || wallpaperTimedOut) && !wallpaperReady"
         class="mt-4 flex w-full flex-col items-center gap-2.5"
       >
-        <p class="text-[10px] text-amber-300/90">壁纸加载超过 15 秒，可先进入</p>
-        <button
-          type="button"
-          class="accent-button px-4 py-1.5 rounded-lg text-[11px] font-medium"
-          @click="$emit('enter')"
-        >
-          仍然进入
-        </button>
+        <p class="text-[10px] text-amber-300/90">
+          {{ wallpaperFailed ? '壁纸加载失败' : '壁纸加载超过 15 秒，可先进入' }}
+        </p>
+        <div class="flex items-center gap-2">
+          <button
+            type="button"
+            class="px-3 py-1.5 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-[11px] text-slate-300 transition"
+            @click="$emit('retry')"
+          >
+            重新加载
+          </button>
+          <button
+            type="button"
+            class="accent-button px-4 py-1.5 rounded-lg text-[11px] font-medium"
+            @click="$emit('enter')"
+          >
+            仍然进入
+          </button>
+        </div>
       </div>
     </div>
   </div>
