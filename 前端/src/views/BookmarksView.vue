@@ -30,6 +30,8 @@ const editing = ref(null)
 const form = reactive({ title: '', url: '', description: '', tags: '' })
 const tagInput = ref('')
 
+const tagPickerOpen = ref(false)
+
 const confirmOpen = ref(false)
 const pendingDelete = ref(null)
 
@@ -81,6 +83,24 @@ async function load(force = false) {
 
 function setTag(tag) {
   activeTag.value = tag
+}
+
+const activeTagLabel = computed(() => {
+  if (activeTag.value === 'ALL') return '分类'
+  if (activeTag.value === '__untagged__') return '未分类'
+  return activeTag.value
+})
+
+const mobileChipClass = (active) => [
+  'inline-flex items-center gap-1 whitespace-nowrap border transition-all px-3 py-1 rounded-xl text-xs',
+  active
+    ? 'bg-indigo-600 text-white border-indigo-400/40'
+    : 'bg-white/5 hover:bg-white/10 text-slate-400 hover:text-slate-200 border-white/5',
+]
+
+function selectTag(tag) {
+  setTag(tag)
+  tagPickerOpen.value = false
 }
 
 function addTag() {
@@ -299,20 +319,38 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
     <!-- 工具条：标签 + 搜索 + 新建同一行 -->
     <div class="flex-shrink-0 flex items-center gap-2 mb-2">
       <!-- 标签过滤：放不下的收进「更多 ▾」，具体几个由 TagFilterBar 按容器宽度折算 -->
-      <TagFilterBar
-        class="flex-1 min-w-0"
-        :tags="allTags"
-        :active="activeTag"
-        all-label="全部书签"
-        accent="indigo"
-        @select="setTag"
-      >
-        <template #default="{ chipClass }">
-          <button v-if="untaggedCount" :class="chipClass('__untagged__')" @click="setTag('__untagged__')">
-            未分类
-          </button>
-        </template>
-      </TagFilterBar>
+      <!-- 桌面端：原有折叠标签条 -->
+      <div class="hidden md:flex flex-1 min-w-0">
+        <TagFilterBar
+          class="flex-1 min-w-0"
+          :tags="allTags"
+          :active="activeTag"
+          all-label="全部书签"
+          accent="indigo"
+          @select="setTag"
+        >
+          <template #default="{ chipClass }">
+            <button v-if="untaggedCount" :class="chipClass('__untagged__')" @click="setTag('__untagged__')">
+              未分类
+            </button>
+          </template>
+        </TagFilterBar>
+      </div>
+
+      <!-- 移动端：只保留「全部书签」和「分类」，点分类弹窗选择所有标签 -->
+      <div class="flex md:hidden flex-1 min-w-0 items-center gap-1.5 font-mono">
+        <button :class="mobileChipClass(activeTag === 'ALL')" @click="setTag('ALL')">
+          全部书签
+        </button>
+        <button
+          :class="mobileChipClass(activeTag !== 'ALL')"
+          class="max-w-[10rem]"
+          @click="tagPickerOpen = true"
+        >
+          <span class="truncate">{{ activeTagLabel }}</span>
+          <span class="opacity-60">▾</span>
+        </button>
+      </div>
 
       <div class="flex items-center gap-1.5 flex-shrink-0">
         <button
@@ -370,6 +408,33 @@ onUnmounted(() => window.removeEventListener('keydown', onGlobalKeydown))
         />
       </div>
     </div>
+
+    <!-- 移动端分类选择弹窗 -->
+    <ModalShell v-model="tagPickerOpen" title="选择分类" icon="bookmark" max-width="max-w-sm">
+      <div class="flex flex-wrap gap-2">
+        <button :class="mobileChipClass(activeTag === 'ALL')" @click="selectTag('ALL')">
+          全部书签
+        </button>
+        <button
+          v-for="tag in allTags"
+          :key="tag"
+          :class="mobileChipClass(activeTag === tag)"
+          @click="selectTag(tag)"
+        >
+          {{ tag }}
+        </button>
+        <button
+          v-if="untaggedCount"
+          :class="mobileChipClass(activeTag === '__untagged__')"
+          @click="selectTag('__untagged__')"
+        >
+          未分类 ({{ untaggedCount }})
+        </button>
+      </div>
+      <p v-if="!allTags.length && !untaggedCount" class="mt-2 text-xs text-slate-500">
+        还没有分类
+      </p>
+    </ModalShell>
 
     <!-- 新增 / 编辑弹窗 -->
     <ModalShell

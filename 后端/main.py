@@ -57,7 +57,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# 访问密码（APP_PASSWORD）：未设置时保持开放；设置后除 /api/auth/* 外都要求登录。
+# 统一登录（SSO）：会话由 auth-server 签发和校验，未登录接口返回 401。
 app.add_middleware(auth.AuthMiddleware)
 app.include_router(auth.router)
 

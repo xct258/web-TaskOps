@@ -16,7 +16,7 @@ export default defineConfig({
     port: 5180,
     // 允许隧道/反代域名访问 dev server。
     // 以 `.` 开头的条目会同时匹配该域名及其全部子域名，
-    // 隧道每次分配的子域名不同（如 1-cfyx.o1-1.xct258.top），这样写可避免反复加白名单。
+    // 隧道每次分配的子域名不同（如 2-cfyx.o1-1.xct258.top），这样写可避免反复加白名单。
     allowedHosts: ['.xct258.top'],
     proxy: {
       '/api': {

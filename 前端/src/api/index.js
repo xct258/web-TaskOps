@@ -254,7 +254,6 @@ export const api = {
   auth: {
     // 登录状态不能缓存，否则会话失效后仍会被当成已登录。
     status: () => request('/auth/status', { cache: false }),
-    login: (password) => request('/auth/login', { method: 'POST', body: { password } }),
     logout: () => request('/auth/logout', { method: 'POST' }),
   },
 

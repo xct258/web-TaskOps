@@ -5,7 +5,6 @@ import AppBackground from '@/components/AppBackground.vue'
 import AppHeader from '@/components/AppHeader.vue'
 import ContextMenu from '@/components/ContextMenu.vue'
 import LoadingScreen from '@/components/LoadingScreen.vue'
-import LoginScreen from '@/components/LoginScreen.vue'
 import ToastHost from '@/components/ToastHost.vue'
 import { auth, loadAuth } from '@/composables/useAuth'
 import { net } from '@/composables/useNet'
@@ -156,10 +155,23 @@ onUnmounted(() => {
     />
   </Transition>
 
-  <LoginScreen
+  <!-- 未登录不提供本地登录页，统一跳转 auth-server；这里只是兜底提示 -->
+  <div
     v-if="auth.checked && !auth.authenticated"
+    class="relative z-10 h-full w-full flex items-center justify-center px-6"
     :class="ready ? 'visible' : 'invisible'"
-  />
+  >
+    <div class="text-center">
+      <p class="text-sm font-semibold tracking-[0.2em] text-slate-400">未登录，正在跳转登录中心…</p>
+      <a
+        v-if="auth.loginUrl"
+        :href="auth.loginUrl"
+        class="mt-3 inline-block text-xs text-indigo-300 hover:text-indigo-200"
+      >
+        手动前往登录
+      </a>
+    </div>
+  </div>
 
   <div
     v-else-if="auth.checked && auth.authenticated"

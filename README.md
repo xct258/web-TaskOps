@@ -223,22 +223,24 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 ---
 
-## 九、访问密码
+## 九、统一登录（SSO）
 
-通过环境变量启用单密码登录（不设置 `APP_PASSWORD` 则保持原来的开放状态）：
+登录页面和访问密码都在独立的 `auth-server`，TaskOps 不再提供本地登录页。
 
 | 变量 | 说明 |
 | --- | --- |
-| `APP_PASSWORD` | 访问密码；留空 = 不启用 |
-| `APP_SECRET` | 会话 Cookie 签名密钥；留空则由密码派生（改密码会让所有会话失效） |
-| `APP_SESSION_DAYS` | 会话有效天数，默认 `7` |
+| `AUTH_ENABLED` | 是否启用登录校验，默认 `true` |
+| `APP_SECRET` | 会话签名密钥；必须与 auth-server、push-server 完全一致 |
+| `SSO_LOGIN_URL` | 统一登录页地址，如 `https://auth.o1-1.xct258.top/login` |
+| `SSO_COOKIE_NAME` | 共享 Cookie 名，默认 `sso_session` |
+| `SSO_COOKIE_DOMAIN` | 父域，如 `.o1-1.xct258.top`；退出登录时用于清除 Cookie |
 | `PUSH_SERVER_TOKEN` | 读取 push-server 记录用的服务间令牌，需与 push-server 一致 |
 | `WALLPAPER_API_URL` | 壁纸图片接口地址，默认 `https://random-image.xct258.top/`；直接返回图片的接口原样使用，也可写 `{seed}` / `{width}` / `{height}` 模板 |
 
-- 登录成功后写入 `HttpOnly` + `SameSite=Lax` 会话 Cookie；HTTPS（含反代 `X-Forwarded-Proto`）下自动带 `Secure`。
-- 同一 IP 连续输错 5 次锁定 60 秒。
-- 未登录访问任何 `/api/*` 会返回 401，前端自动显示登录页；页面静态资源本身仍可访问。
-- 忘记密码时修改 `APP_PASSWORD` 并重启即可；修改后旧会话自动失效。
+- 登录成功后由 auth-server 写入 `HttpOnly` + `SameSite=Lax` 会话 Cookie；HTTPS 下自动带 `Secure`。
+- 未登录访问页面会 `302` 到登录中心，访问 `/api/*` 返回 `401`，前端据此跳转。
+- 退出登录会清除父域 Cookie，push-server 和 TaskOps 同时退出。
+- 修改 `APP_SECRET` 会让所有已登录会话立即失效。
 
 `docker-compose.yml` 已接好这些变量，在仓库根目录放一个 `.env`（参考 `.env.example`）后 `docker compose up -d` 生效。
 

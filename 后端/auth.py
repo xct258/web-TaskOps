@@ -1,66 +1,69 @@
-"""访问密码：单密码登录 + HMAC 签名会话 Cookie。
+"""统一登录（SSO）会话校验：校验 auth-server 签发的共享 Cookie。
+
+登录页面和登录接口都在 auth-server，本服务不再提供本地登录页。
 
 配置（环境变量）：
-    APP_PASSWORD     访问密码；未设置或为空 = 不启用鉴权（兼容旧部署）
-    APP_SECRET       可选，Cookie 签名密钥；不设置则由密码派生
-    APP_SESSION_DAYS 会话有效天数，默认 7
+    AUTH_ENABLED      true/false；未设置时：配了 SSO_LOGIN_URL 或 APP_PASSWORD 即开启
+    APP_SECRET        会话签名密钥；必须与 auth-server、push-server 完全一致
+    SSO_LOGIN_URL     统一登录页地址，如 https://auth.example.com/login
+                      未登录的页面请求会 302 到这里；接口仍返回 401
+    SSO_COOKIE_NAME   Cookie 名，默认 sso_session
+    SSO_COOKIE_DOMAIN 父域，如 .example.com（仅退出登录清 Cookie 时使用）
+    APP_PASSWORD      可选，仅兼容旧部署：没有 APP_SECRET 时用于派生签名密钥
 
 行为：
-    - 未登录访问任何接口返回 401，前端据此显示登录页；
-    - 登录成功写入 HttpOnly Cookie，HTTPS（含反代 X-Forwarded-Proto）下自动加 Secure；
-    - 同一 IP 连续输错 5 次锁定 60 秒，避免在线暴力尝试。
+    - 页面未登录 -> 302 统一登录中心；/api/* 未登录 -> 401，前端据此跳转；
+    - 登录成功由 auth-server 写入 HttpOnly Cookie（HTTPS 下自动 Secure）。
 """
 import hashlib
 import hmac
 import os
 import time
-from typing import Dict, Tuple
+from urllib.parse import quote
 
-from fastapi import APIRouter, HTTPException, Request
-from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from fastapi import APIRouter, Request
+from fastapi.responses import JSONResponse, RedirectResponse
 from starlette.middleware.base import BaseHTTPMiddleware
 
 PASSWORD = os.environ.get("APP_PASSWORD", "")
-SESSION_MAX_AGE = int(os.environ.get("APP_SESSION_DAYS", "7")) * 86400
-COOKIE_NAME = "taskops_session"
+COOKIE_NAME = os.environ.get("SSO_COOKIE_NAME", "sso_session")
+SSO_COOKIE_DOMAIN = os.environ.get("SSO_COOKIE_DOMAIN", "").strip()
+SSO_LOGIN_URL = os.environ.get("SSO_LOGIN_URL", "").strip()
+AUTH_ENABLED_RAW = os.environ.get("AUTH_ENABLED", "").strip().lower()
+
 PUBLIC_PATHS = {
     "/api/auth/status",
-    "/api/auth/login",
     "/api/auth/logout",
-    # 登录页之前就要加载壁纸，配置接口必须公开。
+    # 壁纸等页面配置，登录前后都要能加载。
     "/api/config",
 }
-# 登录页和前端静态资源必须公开，否则未登录时连登录页都加载不出来。
-PUBLIC_STATIC_PATHS = {"/", "/index.html", "/favicon.svg", "/favicon.ico"}
+# 静态资源必须公开，否则未登录时连页面外壳都加载不出来。
+PUBLIC_STATIC_PATHS = {"/favicon.svg", "/favicon.ico"}
 PUBLIC_STATIC_PREFIXES = ("/assets/",)
+
+# 必须与 auth-server 完全一致：APP_SECRET 优先，否则兼容旧的 "sso|密码" 派生。
 SECRET = (
     os.environ.get("APP_SECRET")
-    or hashlib.sha256(f"taskops-session|{PASSWORD}".encode("utf-8")).hexdigest()
+    or (hashlib.sha256(f"sso|{PASSWORD}".encode("utf-8")).hexdigest() if PASSWORD else "")
 ).encode("utf-8")
-
-MAX_FAILURES = 5
-LOCK_SECONDS = 60
-_failures: Dict[str, Tuple[int, float]] = {}
 
 router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 def auth_enabled() -> bool:
-    return bool(PASSWORD)
+    if AUTH_ENABLED_RAW in ("1", "true", "yes", "on"):
+        return True
+    if AUTH_ENABLED_RAW in ("0", "false", "no", "off"):
+        return False
+    return bool(SSO_LOGIN_URL or PASSWORD)
 
 
 def _sign(payload: str) -> str:
     return hmac.new(SECRET, payload.encode("utf-8"), hashlib.sha256).hexdigest()
 
 
-def create_token() -> str:
-    payload = f"v1.{int(time.time()) + SESSION_MAX_AGE}"
-    return f"{payload}.{_sign(payload)}"
-
-
 def verify_token(token: str | None) -> bool:
-    if not token or not auth_enabled():
+    if not SECRET or not token:
         return False
     try:
         version, expires, signature = token.split(".")
@@ -80,33 +83,33 @@ def is_authenticated(request: Request) -> bool:
     return (not auth_enabled()) or verify_token(request.cookies.get(COOKIE_NAME))
 
 
-def _is_https(request: Request) -> bool:
-    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip().lower()
-    return proto == "https" or request.url.scheme == "https"
-
-
-def _set_session_cookie(response: JSONResponse, request: Request) -> JSONResponse:
-    response.set_cookie(
-        COOKIE_NAME,
-        create_token(),
-        max_age=SESSION_MAX_AGE,
-        httponly=True,
-        samesite="lax",
-        secure=_is_https(request),
-        path="/",
+def _original_url(request: Request) -> str:
+    proto = request.headers.get("x-forwarded-proto", "").split(",")[0].strip()
+    proto = proto or request.url.scheme
+    host = (
+        request.headers.get("x-forwarded-host")
+        or request.headers.get("host")
+        or request.url.netloc
     )
-    return response
+    url = f"{proto}://{host}{request.url.path}"
+    if request.url.query:
+        url += f"?{request.url.query}"
+    return url
 
 
-def _client_ip(request: Request) -> str:
-    forwarded = request.headers.get("x-forwarded-for", "")
-    if forwarded:
-        return forwarded.split(",")[0].strip()
-    return request.client.host if request.client else "unknown"
+def redirect_to_login(request: Request) -> RedirectResponse | JSONResponse:
+    if not SSO_LOGIN_URL:
+        return JSONResponse({"detail": "未登录，且未配置 SSO_LOGIN_URL"}, status_code=401)
+    target = _original_url(request)
+    sep = "&" if "?" in SSO_LOGIN_URL else "?"
+    return RedirectResponse(
+        f"{SSO_LOGIN_URL}{sep}next={quote(target, safe='')}",
+        status_code=302,
+    )
 
 
 class AuthMiddleware(BaseHTTPMiddleware):
-    """除登录接口和前端静态资源外，所有请求都要求会话 Cookie。"""
+    """统一登录（SSO）：页面跳登录中心，接口返回 401。"""
 
     async def dispatch(self, request, call_next):
         path = request.url.path
@@ -120,43 +123,24 @@ class AuthMiddleware(BaseHTTPMiddleware):
             return await call_next(request)
         if is_authenticated(request):
             return await call_next(request)
-        return JSONResponse({"detail": "未登录或登录已过期"}, status_code=401)
-
-
-class LoginPayload(BaseModel):
-    password: str = ""
+        if path.startswith("/api/"):
+            return JSONResponse({"detail": "未登录或登录已过期"}, status_code=401)
+        return redirect_to_login(request)
 
 
 @router.get("/status")
 def auth_status(request: Request):
-    return {"enabled": auth_enabled(), "authenticated": is_authenticated(request)}
-
-
-@router.post("/login")
-def auth_login(payload: LoginPayload, request: Request):
-    if not auth_enabled():
-        return {"ok": True, "enabled": False}
-
-    ip = _client_ip(request)
-    now = time.time()
-    count, locked_until = _failures.get(ip, (0, 0.0))
-    if locked_until > now:
-        raise HTTPException(status_code=429, detail="尝试次数过多，请稍后再试")
-
-    if not hmac.compare_digest(payload.password.encode("utf-8"), PASSWORD.encode("utf-8")):
-        count += 1
-        if count >= MAX_FAILURES:
-            _failures[ip] = (0, now + LOCK_SECONDS)
-        else:
-            _failures[ip] = (count, 0.0)
-        raise HTTPException(status_code=401, detail="密码错误")
-
-    _failures.pop(ip, None)
-    return _set_session_cookie(JSONResponse({"ok": True, "enabled": True}), request)
+    return {
+        "enabled": auth_enabled(),
+        "authenticated": is_authenticated(request),
+        "login_url": SSO_LOGIN_URL,
+    }
 
 
 @router.post("/logout")
 def auth_logout():
     response = JSONResponse({"ok": True})
-    response.delete_cookie(COOKIE_NAME, path="/")
+    response.delete_cookie(
+        COOKIE_NAME, path="/", domain=SSO_COOKIE_DOMAIN or None
+    )
     return response

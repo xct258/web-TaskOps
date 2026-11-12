@@ -64,7 +64,7 @@ function formatBytes(bytes) {
 
 <template>
   <div
-    class="loading-screen fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950/70"
+    class="loading-screen fixed inset-0 z-50 flex items-center justify-center overflow-hidden bg-slate-950"
     role="status"
     aria-live="polite"
     aria-label="正在加载"
