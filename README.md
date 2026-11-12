@@ -233,7 +233,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | `SERVICE_ID` | 本服务的服务 ID，固定 `taskops` |
 | `SERVICE_SECRET` | 本服务自己的签名密钥 |
 | `SERVICE_TOKEN_VERSION` | 本服务的 Token 版本，默认 `1` |
-| `SSO_LOGIN_URL` | 统一登录页地址，如 `https://auth.o1-1.xct258.top/login` |
+| `SSO_LOGIN_URL` | 统一登录页地址，如 `https://auth.xct258.top/login` |
 | `SSO_COOKIE_NAME` | 本服务的 Cookie 名，固定 `sso_taskops` |
 | `SSO_COOKIE_DOMAIN` | 父域，如 `.o1-1.xct258.top`；退出登录时用于清除 Cookie |
 | `SSO_ALLOWED_REDIRECT_SUFFIX` | 允许登录后跳转的后缀 |
