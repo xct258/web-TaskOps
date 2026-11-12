@@ -38,7 +38,7 @@ PUSH_SERVER_URL = os.environ.get(
     "PUSH_SERVER_URL", "https://push-server.o1-1.xct258.top"
 ).rstrip("/")
 PUSH_TIMEOUT = float(os.environ.get("PUSH_SERVER_TIMEOUT", "10"))
-# push-server 开启页面密码后，服务间读取 /records、/api/health 需要带 X-Push-Token
+# 服务间读取 /records、/api/health 时带 X-Push-Token（与页面登录无关）
 PUSH_SERVER_TOKEN = os.environ.get("PUSH_SERVER_TOKEN", "")
 
 # /records 单页上限 500；上限兜底防止对端异常时无限翻页。

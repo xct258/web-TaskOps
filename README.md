@@ -225,7 +225,7 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 
 ## 九、统一登录（SSO）
 
-登录页面和访问密码都在独立的 `auth-server`，TaskOps 不再提供本地登录页。
+登录页面和密码校验由独立的 `auth-server` 负责，TaskOps 不再提供本地登录页，也不需要配置访问密码。
 
 | 变量 | 说明 |
 | --- | --- |
