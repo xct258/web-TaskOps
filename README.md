@@ -231,20 +231,18 @@ TaskOps 用 `network_mode: host`，端口在宿主机上。NPM 若在 Docker bri
 | --- | --- |
 | `AUTH_ENABLED` | 是否启用登录校验，默认 `true` |
 | `SERVICE_ID` | 本服务的服务 ID，固定 `taskops` |
-| `SERVICE_SECRET` | 本服务自己的签名密钥 |
-| `SERVICE_TOKEN_VERSION` | 本服务的 Token 版本，默认 `1` |
 | `SSO_LOGIN_URL` | 统一登录页地址，如 `https://auth.xct258.top/login` |
 | `SSO_COOKIE_NAME` | 本服务的 Cookie 名，固定 `sso_taskops` |
 | `SSO_COOKIE_DOMAIN` | 父域，如 `.o1-1.xct258.top`；退出登录时用于清除 Cookie |
 | `SSO_ALLOWED_REDIRECT_SUFFIX` | 允许登录后跳转的后缀 |
-| `SSO_STATE_URL` | auth-server 服务状态地址，用于强制下线，默认 `http://127.0.0.1:8290/api/auth/service` |
+| `SSO_VERIFY_URL` | auth-server 集中验签地址，默认 `http://127.0.0.1:8290/api/auth/verify` |
 | `PUSH_SERVER_TOKEN` | 读取 push-server 记录用的服务间令牌，需与 push-server 一致 |
 | `WALLPAPER_API_URL` | 壁纸图片接口地址，默认 `https://random-image.xct258.top/`；直接返回图片的接口原样使用，也可写 `{seed}` / `{width}` / `{height}` 模板 |
 
 - 登录成功后由 auth-server 写入本服务独立的 `HttpOnly` + `SameSite=Lax` Cookie；HTTPS 下自动带 `Secure`。
 - 未登录访问页面会 `302` 到登录中心，访问 `/api/*` 返回 `401`，前端据此跳转。
 - 退出登录只清除 TaskOps 的 Cookie，不影响 push-server。
-- 修改 `SERVICE_SECRET` 或递增 `SERVICE_TOKEN_VERSION` 会让 TaskOps 的会话立即失效。
+- 当前使用 auth-server 集中验签；管理后台点「下线」后，TaskOps 下一次访问就会失效。
 
 `docker-compose.yml` 已接好这些变量，在仓库根目录放一个 `.env`（参考 `.env.example`）后 `docker compose up -d` 生效。
 
