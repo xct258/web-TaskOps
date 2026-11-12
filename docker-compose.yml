@@ -13,12 +13,15 @@ services:
       # 模板日志与一次性启动标记
       - ./data:/data
     environment:
-      # 统一登录（SSO）：本服务不再提供本地登录，校验 auth-server 的 Cookie
+      # 统一登录（SSO）：本服务使用自己的服务密码和 Cookie
       - AUTH_ENABLED=${AUTH_ENABLED:-true}
-      - APP_SECRET=${APP_SECRET:-}
-      - SSO_LOGIN_URL=${SSO_LOGIN_URL:-}
-      - SSO_COOKIE_NAME=${SSO_COOKIE_NAME:-sso_session}
-      - SSO_COOKIE_DOMAIN=${SSO_COOKIE_DOMAIN:-}
+      - SERVICE_ID=${SERVICE_ID:-taskops}
+      - SERVICE_SECRET=${SERVICE_SECRET:-}
+      - SERVICE_TOKEN_VERSION=${SERVICE_TOKEN_VERSION:-1}
+      - SSO_LOGIN_URL=${SSO_LOGIN_URL:-https://auth.o1-1.xct258.top/login}
+      - SSO_COOKIE_NAME=${SSO_COOKIE_NAME:-sso_taskops}
+      - SSO_COOKIE_DOMAIN=${SSO_COOKIE_DOMAIN:-.o1-1.xct258.top}
+      - SSO_ALLOWED_REDIRECT_SUFFIX=${SSO_ALLOWED_REDIRECT_SUFFIX:-.o1-1.xct258.top}
       - PUSH_SERVER_URL=${PUSH_SERVER_URL:-https://push-server.o1-1.xct258.top}
       - PUSH_SERVER_TOKEN=${PUSH_SERVER_TOKEN:-}
       # 壁纸图片接口地址（支持 {seed}/{width}/{height} 占位符）
